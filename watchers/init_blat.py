@@ -13,12 +13,13 @@ DATA_DIR = "/data/dd-analysis"
 
 
 #blat server for rapid substring alignments to the data
-def create_blat(tmpfolder,dataset):
+def init_blat(tmpfolder,dataset):
     _write_blat_fa(tmpfolder,dataset)
     _write_master_blat_fa()
     
-    relaunch_cmds = ["god","restart", "run-blat"]
+    relaunch_cmds = ["god","restart", "simple"]
     out = spc.call(relaunch_cmds)
+    return 0
 
 
 def _write_blat_fa(tmpfolder,dataset):
@@ -35,10 +36,11 @@ def _write_blat_fa(tmpfolder,dataset):
         os.makedirs(blat_dir)
     
     with open(os.path.join(blat_dir, "raw_sequences.fa"),"w") as seqsfile:
-              seqsfile.write("".join([">{}\n{}\n".format(idx,x)
+        seqsfile.write("".join([">{}_{}\n{}\n".format(dataset["dataset"],idx,x)
                                       for idx,x in sequences.iteritems() if x != "N"]))
 
 def _write_master_blat_fa():
+    print("loading master bat file")
     master_fa = os.path.join("/data/dd-analysis/master_blat","master.fa")
 
     if not os.path.isdir("/data/dd-analysis/master_blat"):
@@ -50,7 +52,9 @@ def _write_master_blat_fa():
     for f in dataset_folders:
         with open(os.path.join(DATA_DIR,"datasets",f,"blat","raw_sequences.fa")) as fopen:
             alltext += fopen.read()
-    
+
+
+    if os.path.isfile(master_fa): os.remove(master_fa)
     with open(master_fa,"w") as fopen:
         fopen.write(alltext)
     cmds = ["faToTwoBit", master_fa, master_fa[:-2]+"2bit"]

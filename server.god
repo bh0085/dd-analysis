@@ -1,16 +1,7 @@
 God.watch do |w|
-  w.name = "run-blat"
-  w.start = "/home/ben_coolship_io/dd-alignment-server/scripts/run-blat.sh"
+  w.name = "simple"
+  w.start = "/home/ben_coolship_io/bin/gfServer -tileSize=8 -minMatch=1 start 0.0.0.0 8080 master.2bit"
+  w.dir = "/data/dd-analysis/master_blat/"
   w.keepalive
-  w.log = "/home/ben_coolship_io/dd-alignment-server/scripts/logs/run-blat.log"
+  w.log = "/home/ben_coolship_io/dd-alignment-server/.god-logs/gf.log"
 end
-
-
-God.watch do |w|
-  w.name = "worker"
-  w.start = "/home/ben_coolship_io/dd-alignment-server/worker_app.py"
-  w.keepalive
-  w.log = "/home/ben_coolship_io/dd-alignment-server/scripts/logs/worker_app.log"
-end
-
-

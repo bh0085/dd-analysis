@@ -60,6 +60,17 @@ def start_worker():
     return  redirect("results/"+str(job.get_id()),code = 307)
 
 
+@app.route("/umi/go_keywords/<dataset>/<query>/")
+def go_keywords(dataset,query):
+    umis_gofile = f"/data/dd-analysis/datasets/{dataset}/goterms/umis2go.csv"
+    with pd.read
+
+@app.route("/segment/go_keywords/<dataset>/<query>/")
+def go_keywords(dataset,query):
+    segments_gofile = f"/data/dd-analysis/datasets/{dataset}/goterms/segments2go.csv"
+    
+
+
 @app.route("/blat/<dataset>/<query>/")
 def blat_sequence_to_dataset(dataset,query):
     
@@ -89,7 +100,7 @@ def blat_sequence_to_dataset(dataset,query):
     #    out = f.read()
     results = parse_psl(os.path.join(BLAT_TMPDIR, outfn))
     print(results["T name"])
-    return json.dumps([int(e) for e in list(results["T name"].values)])
+    return json.dumps([e for e in list(results["T name"].values)])
 
 
 def parse_psl(fn):
