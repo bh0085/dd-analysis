@@ -1,0 +1,24 @@
+God.watch do |w|
+  w.name = "run-blat"
+  w.start = "/home/ben_coolship_io/dd-alignment-server/scripts/run-blat.sh"
+  w.keepalive
+  w.log = "/home/ben_coolship_io/dd-alignment-server/.god-logs/run-blat.log"
+end
+
+
+God.watch do |w|
+  w.name = "worker"
+  w.start = "/home/ben_coolship_io/dd-alignment-server/worker_app.py"
+  w.keepalive
+  w.log = "/home/ben_coolship_io/dd-alignment-server/.god-logs/worker_app.log"
+end
+
+
+God.watch do |w|
+  w.name = "upload-watcher"
+  w.start = "/home/ben_coolship_io/dd-alignment-server/watchers/upload-watcher.py"
+  w.keepalive
+  w.log = "/home/ben_coolship_io/dd-alignment-server/.god-logs/upload-watcher.log"
+end
+
+

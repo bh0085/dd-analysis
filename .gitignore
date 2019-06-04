@@ -3,3 +3,6 @@ __pycache__
 logs/
 .god-logs
 #*
+/notebooks/
+/.vscode
+*.code-workspace
