@@ -5,6 +5,9 @@ from sqlalchemy import Column, String, Integer, Float, ForeignKey, ForeignKeyCon
 from sqlalchemy.ext.declarative import declarative_base  
 from sqlalchemy.orm import sessionmaker
 
+DATASETS_ROOT = "/data/dd-analysis/datasets"
+
+
 db_string = "postgres://ben_coolship_io:password@localhost/dd"
 db = create_engine(db_string)  
 base = declarative_base()
@@ -52,12 +55,9 @@ def enter_all_datasets():
     datasets = ["6989106579746251"]
     for d in datasets:
         enter_dataset(d)
+
 def enter_data(d):
-    DATASETS_ROOT = "/data/dd-analysis/datasets"
-    
-    datasets = 
-    dataframes = {}
-    for d in datasets:
+     
         dfs = {}
         print("loading data for {}".format(d))
 
@@ -78,7 +78,6 @@ def enter_data(d):
         #dfs["go2cells"] = pd.read_csv(os.path.join(DATASETS_ROOT, d,"goterms/segments2go.csv")).dropna()#.set_index("GO_NAME")
         #dfs["cells2geneids"] = pd.read_csv(os.path.join(DATASETS_ROOT, d,"genesymbols/segment_symbols.csv")).dropna()#.set_index("segment")
         
-        dataframes[d] = dfs
 
 def main():
 
@@ -90,16 +89,17 @@ def main():
                         help='drop database tables and all content')
 
     
-    parser.add_argument('--load-all', dest='reset', action='store_const',
+    parser.add_argument('--load', dest='load', action='store_const',
                         const=True, default=False,
-                        help='drop database tables and all content')
+                        help='reload all database content')
 
     args = parser.parse_args()
 
     if args.reset:
         meta.drop_all(db)
         meta.create_all(db)
-
+    if args.load:
+        enter_all_datasets()
 
 if __name__ =="__main__":
     main()

@@ -174,53 +174,22 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
             val["server_job_statuses"][v] = "WAITING"
 
 
-
-    #val["server_job_statuses"]["INIT_XY_BUFFERS"] = "WAITING"            
     root.update({dataset_key:val})
     val = None
 
     tmpdir = _create_tmpfiles(gcs_folder, dataset,reset_tmpfiles = reset_tmpfiles)
     dskey = dataset_key
     
-    #process input xumi data to coords / annotations formats for the frontend
-    jobname=jobs["INIT_FRONTEND"]
-    if get_jobstatus(dskey,jobs["INIT_FRONTEND"]) == status["WAITING"]:
-        set_jobstatus(dataset_key, jobs["INIT_FRONTEND"], status["RUNNING"])
-        jobfuns[jobname](tmpdir,dataset,key=dataset_key)
-        set_jobstatus(dataset_key, jobs["INIT_FRONTEND"], status["COMPLETE"])
-
-    #initialize a blat database for alignments within this dataset
-    if get_jobstatus(dskey,jobs["INIT_BLAT"]) == status["WAITING"]:
-        set_jobstatus(dataset_key, jobs["INIT_BLAT"], status["RUNNING"])
-        output_status = init_blat(tmpdir,dataset)
-        
-        if output_status == 0:
-            set_jobstatus(dataset_key, jobs["INIT_BLAT"], status["COMPLETE"])
-        else: raise Exception(f"nonzero output status for {jobs['INIT_BLAT']}")
-
-    #align all reads in this dataset to the reference genome and create GO lookups
-    if get_jobstatus(dataset_key, jobs["INIT_TOPHAT_TRANSCRIPTS"]) == "WAITING":
-        set_jobstatus(dataset_key, jobs["INIT_TOPHAT_TRANSCRIPTS"], status["RUNNING"])
-        output_status = init_tophat_transcripts(tmpdir,dataset)
-                              
-        if output_status == 0:
-            set_jobstatus(dataset_key, jobs["INIT_TOPHAT_TRANSCRIPTS"], status["COMPLETE"])
-        else: raise Exception(f"nonzero output status for {jobs['INIT_TOPHAT_TRANSCRIPTS']}")
-
-    jobname = jobs["INIT_GO_TERMS"]
-    #align all reads in this dataset to the reference genome and create GO lookups
-    if get_jobstatus(dataset_key, jobname) == "WAITING":
-        set_jobstatus(dataset_key, jobname, status["RUNNING"])
-        try: output_status = init_go_terms(tmpdir,dataset)
-        except Exception as e:
-            set_jobstatus(dataset_key,jobname,"FAILED")
-            raise(e)
-        if output_status == 0:
-            set_jobstatus(dataset_key,jobname, status["COMPLETE"])
-        else: raise Exception(f"nonzero output status for {jobname}")
-
     #TODO: REPLACE ALL JOB QUEUEING WITH THIS LOOP
-    for jobkey in ["INIT_XY_BUFFERS", "INIT_COLOR_BUFFERS"]:
+    for jobkey in [
+        "INIT_FRONTEND",
+        "INIT_BLAT",
+        "INIT_TOPHAT_TRANSCRIPTS", 
+        "INIT_GO_TERMS", 
+        "INIT_XY_BUFFERS", 
+        "INIT_COLOR_BUFFERS"]:
+
+
         jobname = jobs[jobkey]
         if get_jobstatus(dataset_key, jobname) == "WAITING":
             set_jobstatus(dataset_key, jobname, status["RUNNING"])
@@ -233,10 +202,7 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
             else: raise Exception(f"nonzero output status for {jobname}")
     
            
-        
-
     val = root.get()[dataset_key]
-    #no jobs are still running. RESET
     for k,v in val["server_job_statuses"].items():
         if v =="RUNNING": val["server_job_statuses"][k]="WAITING"
     root.update({dskey:val})
@@ -252,45 +218,45 @@ def set_jobstatus(dskey, name,value):
     val = root.get()[dskey]
     val["server_job_statuses"][name] = value
     root.update({dskey:val})
-        
     
                                    
 def loop_queue(**kwargs): 
-    #create a list of all datasets in firebase
+    #list all datasets in firebase
     datasets = root.get()
+    #create a list of users from all datasets
     users = set([v["userId"] for k,v in list( datasets.items())])
 
-    #for each user, check for incomplete jobs
     for u in users:
+        #for each user, look at the list of all uploaded files, searching for unique dataset ids
         fpath = os.path.join(DATAROOT,"", u)
         userfiles = os.listdir(fpath)
         dsre = re.compile("[^_](\d+)$")
-        filtered_sorted = sorted([u for u in userfiles if dsre.search(u)],key= lambda x: dsre.search(x).group())
         
+        #identify all files which can be matched to a dataset
+        filtered_sorted = sorted([u for u in userfiles if dsre.search(u)],key= lambda x: dsre.search(x).group())
+        #cycle through dataset file groups
         for dataset, g in it.groupby(filtered_sorted,lambda x:dsre.search(x).group()):
-            grps = list(g)
+            #check firebase for a database record associated with the uploaded files
             matched = [ (k, d) for k,d in datasets.items() if d["dataset"] ==dataset]
             if len(matched)==1:
                 k,d = matched[0]
+                #check job status on the server
                 if d["server_process_status"] =="COMPLETE": continue
+                #process the upload if necessary
                 process_dataset(fpath, d, k, **kwargs)
             else:
-                print (f"no matching record found for dataset files {dataset}")
+                print (f"no matching firebase entry found for dataset files {dataset}")
     time.sleep(1)
     
 def main():
     import argparse
-
     parser = argparse.ArgumentParser(description='Watch for webserver file uploads and process datasets, finding genome alignments and functional annotations.')
-    
     #parser.add_argument('integers', metavar='N', type=int, nargs='?',
     #                help='an integer for the accumulator')
     parser.add_argument('--reset-one', dest="r", nargs='?')
-    
     parser.add_argument('--noloop', dest='noloop', action='store_const',
                         const=True, default=False,
                         help='Keep looping to wait for new sequences')
-
     parser.add_argument('--reset-tmpfiles', dest='reset_tmpfiles', action='store_const',
                         const=True, default=False,
                         help='Recreate tmpfiles')
