@@ -1,95 +1,24 @@
 #!/usr/bin/env python
-import firebase_admin
 
-from firebase_admin import credentials
-from firebase_admin import storage
 
-import six
-import os, re, time, requests, sys
+import os, re, time, requests, sys, six
 import itertools as it
-
-from process_frontend import make_files
 
 from init_blat import init_blat
 from init_tophat_transcripts import init_tophat_transcripts
 from init_go_terms import init_go_terms
 from init_coords_and_colors import init_color_buffers, init_xy_buffers
-
+from init_frontend import init_frontend
 from shutil import copyfile
+from init_database_files import init_database_files
+from watchers_firebase import root, storage
 
 
-
-cred = credentials.Certificate('/home/ben_coolship_io/.ssh/jwein-206823-firebase-adminsdk-askpb-7709f1ff8f.json')
-firebase_admin.initialize_app(cred, {
-    'databaseURL' : 'https://jwein-206823.firebaseio.com/',
-    'storageBucket': 'slides.dna-microscopy.org'
-
-})
-
-from firebase_admin import db
-root = db.reference("datasets/all_v2")
 DATAROOT = "/slides/all_v2/website_datasets"
 NAME=__file__[:-3]
 tmp_root = os.path.join(f"/data/tmp/{NAME}/")
 if not os.path.isdir(tmp_root): os.makedirs(tmp_root)
-
 RESTART_FAILED_JOBS = True
-
-
-def process_frontend(folder, dataset):
-    #get transformed files
-    files_for_upload = make_files(folder, dataset)
-    return files_for_upload
-
-def process_coords(folder,dataset):
-    
-    return -1
-
-def upload_frontend_files(files,dataset, dataset_key):
-    bucket = storage.bucket()
-
-    urls = []
-    for nm,fpath in files.items():
-        with open(fpath,"rb") as file_stream:
-            basename,extension = (fpath.split("/")[-1].split(".")[0]\
-                                 ,".".join( fpath.split("/")[-1].split(".")[1:]))
-            bucket_fn = os.path.join(f"all_v2/website_datasets/{dataset['userId']}/{basename}_{dataset['dataset']}.{extension}")
-            textblob = bucket.blob(bucket_fn)
-            textblob.cache_control = 'no-cache'
-            textblob.content_encoding = 'gzip'
-            textblob.upload_from_string(file_stream.read(),content_type="application/octet-stream")
-            textblob.reload()
-            req = requests.get(textblob.public_url)
-            url = textblob.public_url
-        
-            if isinstance(url, six.binary_type):
-                url = url.decode('utf-8')
-            urls.append(url)
-
-            print(url)
-
-            if "annotation" in basename:
-                annotations_url = url
-                afname = bucket_fn
-            elif "coords" in basename:
-                download_url = url
-                cfname = bucket_fn
-           
-
-    val = root.get()[dataset_key]
-
-    val.update(dict(
-        annotations_url = annotations_url,
-        downloadUrl= download_url,
-        filename= cfname,
-    ))
-    val["allfiles"].update({
-            "coords":cfname,
-            "annotations":afname,
-    })
-
-    root.update({dataset_key:val})
-
 
 
 def _create_tmpfiles(folder, dataset,reset_tmpfiles):
@@ -115,14 +44,10 @@ def _create_tmpfiles(folder, dataset,reset_tmpfiles):
             copyfile(cur_loc,new_loc)
     return tmpdir
 
-def init_frontend(tmpdir, dataset, key = None):
-    if not key: raise Exception()
-    files_for_upload = process_frontend(tmpdir,dataset)
-    upload_frontend_files(files_for_upload,dataset,key)
-    return 0
     
 def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
-    force_resets = kwargs.get("force_resets",[])
+    force_resets_step = kwargs.get("force_resets_step",[])
+    force_resets_dataset = kwargs.get("force_resets_dataset",[])
     reset_tmpfiles = kwargs.get("reset_tmpfiles")
 
     status = dataset["server_process_status"]
@@ -138,6 +63,7 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
         "INIT_GO_TERMS":"INIT_GO_TERMS",
         "INIT_XY_BUFFERS":"INIT_XY_BUFFERS",
         "INIT_COLOR_BUFFERS":"INIT_COLOR_BUFFERS",
+        "INIT_DATABASE_FILES":"INIT_DATABASE_FILES",
     }
     #enumerate job statuses
     status = {
@@ -154,7 +80,10 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
         "INIT_BLAT":init_blat,
         "INIT_XY_BUFFERS":init_xy_buffers,
         "INIT_COLOR_BUFFERS":init_color_buffers,
+        "INIT_DATABASE_FILES":init_database_files,
+
     }
+
     
     #initialize job handling for this dataset
     val = root.get()[dataset_key]
@@ -162,16 +91,26 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
         val.update(dict( server_job_statuses = {}))
         val.update(dict( server_job_progresses= {}))
         
+    
     for k,v in jobs.items():
+        if dataset["dataset"] in force_resets_dataset:
+            print("resetting", v, f"for {dataset['dataset']}")
+            val["server_job_statuses"][v] = "WAITING"
+            continue
+
+        #reset this step if forced
+        if v in force_resets_step:
+            val["server_job_statuses"][v] = "WAITING"
+            continue
+
+        #check if the job is incomplete
         if not val["server_job_statuses"].get(v,None) == status["COMPLETE"]:
+            #if so, then if it has not failed, restart. Otherwise, test if we
+            #should restart failed jobs
             if RESTART_FAILED_JOBS or (
                     val["server_job_statuses"].get(v,None) != status["FAILED"]):
                 val["server_job_statuses"][v] = status["WAITING"]
                 val["server_job_progresses"][v] = 0
-        if v in force_resets:
-            print (force_resets)
-            print (v)
-            val["server_job_statuses"][v] = "WAITING"
 
 
     root.update({dataset_key:val})
@@ -187,13 +126,19 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
         "INIT_TOPHAT_TRANSCRIPTS", 
         "INIT_GO_TERMS", 
         "INIT_XY_BUFFERS", 
-        "INIT_COLOR_BUFFERS"]:
+        "INIT_COLOR_BUFFERS",
+        "INIT_DATABASE_FILES"]:
 
+        #pass additional args (such as the storage key)
+        #if a job requires it
+        kw = {
+            "key":dskey
+        } if jobkey == "INIT_FRONTEND" else {}
 
         jobname = jobs[jobkey]
         if get_jobstatus(dataset_key, jobname) == "WAITING":
             set_jobstatus(dataset_key, jobname, status["RUNNING"])
-            try: output_status = jobfuns[jobname](tmpdir,dataset)
+            try: output_status = jobfuns[jobname](tmpdir,dataset, **kw)
             except Exception as e:
                 set_jobstatus(dataset_key,jobname,"FAILED")
                 raise(e)
@@ -251,9 +196,8 @@ def loop_queue(**kwargs):
 def main():
     import argparse
     parser = argparse.ArgumentParser(description='Watch for webserver file uploads and process datasets, finding genome alignments and functional annotations.')
-    #parser.add_argument('integers', metavar='N', type=int, nargs='?',
-    #                help='an integer for the accumulator')
-    parser.add_argument('--reset-one', dest="r", nargs='?')
+    parser.add_argument('--reset-dataset', dest="rd", nargs='?')
+    parser.add_argument('--reset-step', dest="rs", nargs='?')
     parser.add_argument('--noloop', dest='noloop', action='store_const',
                         const=True, default=False,
                         help='Keep looping to wait for new sequences')
@@ -263,13 +207,17 @@ def main():
 
     
     args = parser.parse_args()
+    force_resets_step = []
+    if args.rs:
+        force_resets_step = [args.rs]
 
-    force_resets = []
-    if args.r:
-        force_resets = [args.r]
+    force_resets_dataset = []
+    if args.rd:
+        force_resets_dataset = [args.rd]
         
     while 1:
-        loop_queue(force_resets = force_resets,
+        loop_queue(force_resets_step = force_resets_step,
+            force_resets_dataset = force_resets_dataset,
                    reset_tmpfiles = args.reset_tmpfiles)
         
         if args.noloop: break

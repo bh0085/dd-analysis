@@ -137,7 +137,8 @@ def init_go_terms(tmpfolder, dataset):
     umi2go=umi2txall.drop_duplicates(["umi","symbol"]).join(ontologies_by_symbol, on="symbol" )
     
     cnt = -1
-    for s in segments:
+    slen = len(segments)
+    for i,s in enumerate(segments):
         cnt+=1
         umis = [str(e) for e in segdf.loc[segdf.seg ==s].umi]
 
@@ -161,7 +162,7 @@ def init_go_terms(tmpfolder, dataset):
         segment_counts = gonames.drop_duplicates().join(gonames.go_id.value_counts().rename("count"),on="go_id")
         segment_gonames = segment_gonames.append(segment_counts)
 
-        if cnt %50 == 0: print (cnt)
+        if cnt %50 == 0: print (f"{i} of {slen} segments processed")
         #if cnt>100:break
         
     OUTDIR_GO=os.path.join( f"/data/dd-analysis/datasets/{dataset['dataset'] }/goterms/")    
