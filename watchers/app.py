@@ -11,7 +11,7 @@ app = Flask(__name__)
 
 import exports, queries, dataset_manager
 
-datasets = dataset_manager.datasets
+
 
 @app.after_request
 def after_request(response):
@@ -22,7 +22,6 @@ def after_request(response):
 
 
 from flask import Flask,redirect    
-
 from rq import Queue
 from rq.job import Job
 from worker_app import conn

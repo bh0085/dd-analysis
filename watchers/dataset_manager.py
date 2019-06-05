@@ -20,15 +20,19 @@ class Dataset(base):
     
 class Umi(base):  
     __tablename__ = 'umi'
-    ds = Column(Integer, ForeignKey(Dataset.id), index = True, primary_key = True)
-    idx = Column(Integer, index = True, primary_key = True)
+    dsid = Column(Integer, ForeignKey(Dataset.id), index = True, primary_key = True)
+                #one of 2 primary keys, assigned from dataset
+    idx = Column(Integer, index = True, primary_key = True) 
+                #second primary key, assigned according to the row in the original file
     x = Column(Float)
     y = Column(Float)
+    s20 = Column(Integer)
+    t = Column(Integer)
 
 class UmiGoTerm(base):
     __tablename__ ="umigoterm"
-    id = Column(Integer, primary_key = True)
-    umi_ds = Column(Integer)
+    id = Column(Integer, primary_key = True, autoincrement = True)
+    dsid = Column(Integer)
     umi_idx = Column(Integer)
     __table_args__ = (ForeignKeyConstraint([umi_ds, umi_idx],
                                            [Umi.ds, Umi.idx]),
@@ -39,7 +43,7 @@ class UmiGoTerm(base):
     
 class UmiGeneId(base):
     __tablename__ = "umigeneid"
-    id = Column(Integer, primary_key = True)
+    id = Column(Integer, primary_key = True, autoincrement = True)
     umi_ds = Column(Integer)
     umi_idx = Column(Integer)
     __table_args__ = (ForeignKeyConstraint([umi_ds, umi_idx],
@@ -58,26 +62,24 @@ def enter_all_datasets():
 
 def enter_data(d):
      
-        dfs = {}
-        print("loading data for {}".format(d))
+        #dfs = {}
+        #print("loading data for {}".format(d))
 
-        print("TODO : PRE FILTER NAs AND GET INDEXING WORKING PROPERLY")
-        umis2go_path = os.path.join(DATASETS_ROOT, d,"goterms/umis2go.csv")
-        umis2geneids_path = os.path.join(DATASETS_ROOT, d,"genesymbols/umi_symbols.csv")
-        umis2seg_path = os.path.join(DATASETS_ROOT, d,"segments/umi2seg.csv")
+        # print("TODO : PRE FILTER NAs AND GET INDEXING WORKING PROPERLY")
+        # umis2go_path = os.path.join(DATASETS_ROOT, d,"goterms/umis2go.csv")
+        # umis2geneids_path = os.path.join(DATASETS_ROOT, d,"genesymbols/umi_symbols.csv")
+        # umis2seg_path = os.path.join(DATASETS_ROOT, d,"segments/umi2seg.csv")
 
-        
-
-        dfs["umis2go"] = pd.read_csv(umis2go_path).dropna()
-        dfs["umis2geneids"] = pd.read_csv(umis2geneids_path).dropna()#.set_index("umi")
-        dfs["umi2seg"] = pd.read_csv(umis2seg_path).dropna()
-
+        # dfs["umis2go"] = pd.read_csv(umis2go_path).dropna()
+        # dfs["umis2geneids"] = pd.read_csv(umis2geneids_path).dropna()#.set_index("umi")
+        # dfs["umi2seg"] = pd.read_csv(umis2seg_path).dropna()
 
         #dfs["go2umis"] = pd.read_csv(os.path.join(DATASETS_ROOT, d,"goterms/umis2go.csv")).dropna()#.set_index("GO_NAME")
         #dfs["cells2go"] = pd.read_csv(os.path.join(DATASETS_ROOT, d,"goterms/segments2go.csv")).dropna()#.set_index("segment")
         #dfs["go2cells"] = pd.read_csv(os.path.join(DATASETS_ROOT, d,"goterms/segments2go.csv")).dropna()#.set_index("GO_NAME")
         #dfs["cells2geneids"] = pd.read_csv(os.path.join(DATASETS_ROOT, d,"genesymbols/segment_symbols.csv")).dropna()#.set_index("segment")
         
+        folder = 
 
 def main():
 
