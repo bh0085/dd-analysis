@@ -9,6 +9,8 @@ from init_tophat_transcripts import init_tophat_transcripts
 from init_go_terms import init_go_terms
 from init_coords_and_colors import init_color_buffers, init_xy_buffers
 from init_frontend import init_frontend
+from init_dataset_database import init_dataset_database
+
 from shutil import copyfile
 from init_database_files import init_database_files
 from watchers_firebase import root, storage
@@ -64,6 +66,7 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
         "INIT_XY_BUFFERS":"INIT_XY_BUFFERS",
         "INIT_COLOR_BUFFERS":"INIT_COLOR_BUFFERS",
         "INIT_DATABASE_FILES":"INIT_DATABASE_FILES",
+        "INIT_DATASET_DATABASE":"INIT_DATASET_DATABASE",
     }
     #enumerate job statuses
     status = {
@@ -81,8 +84,11 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
         "INIT_XY_BUFFERS":init_xy_buffers,
         "INIT_COLOR_BUFFERS":init_color_buffers,
         "INIT_DATABASE_FILES":init_database_files,
+        "INIT_DATASET_DATABASE":init_dataset_database,
 
     }
+
+
 
     
     #initialize job handling for this dataset
@@ -90,7 +96,9 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
     if not "server_job_statuses" in val:
         val.update(dict( server_job_statuses = {}))
         val.update(dict( server_job_progresses= {}))
-        
+    
+    val["server_process_status"] = status["RUNNING"]
+    root.update({dataset_key:val})
     
     for k,v in jobs.items():
         if dataset["dataset"] in force_resets_dataset:
@@ -127,7 +135,8 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
         "INIT_GO_TERMS", 
         "INIT_XY_BUFFERS", 
         "INIT_COLOR_BUFFERS",
-        "INIT_DATABASE_FILES"]:
+        "INIT_DATABASE_FILES",
+        "INIT_DATASET_DATABASE"]:
 
         #pass additional args (such as the storage key)
         #if a job requires it
@@ -150,6 +159,11 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
     val = root.get()[dataset_key]
     for k,v in val["server_job_statuses"].items():
         if v =="RUNNING": val["server_job_statuses"][k]="WAITING"
+
+    
+    val["server_process_status"] = status["COMPLETE"]
+    root.update({dataset_key:val})
+    
     root.update({dskey:val})
     
     return
