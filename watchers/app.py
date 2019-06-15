@@ -9,8 +9,11 @@ app = Flask(__name__)
 #CORS(app)
 #api = Api(app)
 
-import exports, queries, dataset_manager
-
+import exports, queries
+from dataset_models import Umi, session, db, Dataset, UmiGoTerm, UmiGeneId, GoTerm, NcbiGene, Segment
+rsq = pd.read_sql_query
+sq = session.query
+from sqlalchemy import desc, asc, func
 
 
 @app.after_request
@@ -26,14 +29,8 @@ from rq import Queue
 from rq.job import Job
 from worker_app import conn
 
-#app.config.from_object(os.environ['APP_SETTINGS'])
-#app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
-#db = SQLAlchemy(app)
 
 q = Queue(connection=conn)
-
-
-
 TMPDIR = "/data/tmp"
 BLAT_PORT = "8080"
 BLAT_HOST = "localhost"
@@ -79,78 +76,55 @@ def start_worker():
 
 
 
+def datasetId(full_id):
+      return int(full_id[:8])
+
 @app.route("/exports/umis/fasta/<dataset>/")
 def export_fasta(dataset):
   output = exports.make_fasta_file(dataset)
   return output
 
 @app.route("/queries/umis/geneids/<dataset>/<query>/")
-def umigeneids(dataset,query):
-  df = dataframes[dataset]["umis2geneids"]
-  matches = df.loc[df.ncbi_gene == query].umi
-  return json.dumps([[v,0] for v in  matches.values])
+def umigeneids(dataset,geneid_query):
+  return json.dumps(list(rsq(sq(Umi.id)\
+    .join(UmiGeneId).join(NcbiGene).join(Dataset)\
+      .filter(Dataset.id==datasetId(dataset)).filter(NcbiGene.geneid==int(geneid_query)).statement,db)\
+        .id.values))
+  
 
 @app.route("/queries/umis/goterms/<dataset>/<query>/")
 def umigoterms(dataset,query):
-  df = dataframes[dataset]["go2umis"]
-  matches = df.loc[df.go_name.str.contains(query)].umi
+    return json.dumps(list(rsq(sq(Umi.id)\
+    .join(UmiGoTerm).join(GoTerm).join(Dataset)\
+      .filter(Dataset.id==datasetId(dataset)).filter(GoTerm.go_name.ilike(f"%{goterm_query}%")).statement,db)\
+        .id.values))
+  
+@app.route("/queries/cells/geneids/<dataset>/<geneid_query>/")
+def cellgeneids(dataset,geneid_query):
+
+  
+
   return json.dumps(matches.values)
+  
+@app.route("/queries/cells/goterms/<dataset>/<goterm_query>/")
+def cellgoterms(dataset,goterm_query):
 
-  
-@app.route("/queries/cells/geneids/<dataset>/<query>/")
-def cellgeneids(dataset,query):
-  df = dataframes[dataset]["cells2geneids"]
-  matches = df.loc[df.ncbi_gene.str.contains(query)].segment
-  return json.dumps(matches.values)
-  
-@app.route("/queries/cells/goterms/<dataset>/<query>/")
-def cellgoterms(dataset,query):
-  df = dataframes[dataset]["go2cells"]
+  subq = session.query(Umi.seg,func.count(distinct(Umi.id)).label('count_matched')).join(UmiGoTerm).join(GoTerm)\
+      .filter(GoTerm.go_name.ilike(f"%{goterm_query}%")).group_by(Umi.seg).subquery()
 
+  subq2 = session.query(Umi.seg,func.count(distinct(Umi.id)).label('count_all'))\
+      .group_by(Umi.seg).subquery()
 
-  
-  
-  seg_lookup = dataframes[dataset]["umi2seg"]
-  seg_sizes = seg_lookup.seg.value_counts()
-  
-  matches = df.loc[df.go_name.str.contains(query)]
-  print ("n total segment matches: {}".format(len(matches)))
+  out4 = sq(distinct(Segment.id),subq.c.count,subq2.c.count).join(Umi).join(UmiGoTerm).join(GoTerm)\
+    .join(subq, subq.c.seg == Segment.id)\
+    .join(subq2, subq2.c.seg == Segment.id)\
+    .filter(GoTerm.go_name.ilike(f"%{goterm_query}%"))\
+    .all()
 
-  minsize= 0
-  
-  matches = matches.loc[matches.segment.isin(seg_sizes.loc[seg_sizes>=minsize].index)].dropna()
-  print ("n segment matches with size >{}: {}".format(minsize,len(matches))) 
+  out4["enrichment"]  = out4.count_matched / out4.count_all
+  wholecells=out4.loc[out4.count_all >1]
 
-  matchcounts = matches.groupby("segment").apply(lambda x: x["count"].sum())
-  
-  normalized_counts = (matchcounts / seg_sizes).dropna()
-  saturation_thresh = 90
-         
-  normalized_counts = normalized_counts / np.percentile(normalized_counts,saturation_thresh)
-  normalized_counts.loc[normalized_counts >= 1] = 1
-  umis_with_counts =seg_lookup.join(pd.Series(normalized_counts,name="enrichment"),on="seg")[["umi","enrichment"]].dropna()
-
-  print( "total number of umis matched {}".format(len(umis_with_counts)))
-
-  
-  inp_folder = "/data/tmp/watch_sequences/"+dataset
-  xumi_base = "xumi_base_"+dataset
-  xumi_feat = "xumi_feat_"+dataset
-  xumi_basepath = os.path.join(inp_folder,xumi_base)
-  xumi_featpath = os.path.join(inp_folder,xumi_feat)
-  
-  
-  #map from ids to frontend indexes
-  feats_df = pd.read_csv(xumi_featpath,names =["id","type","ar","tr","seq"])
-  coords_df = pd.read_csv(xumi_basepath, names =["id","x","y"])
-  coords_df = coords_df.loc[feats_df.type!=-1]
-  coords_df["idx"] = coords_df.index
-  coords_df = coords_df.set_index(coords_df.id)
-  umi_ids_to_idxs = umis_with_counts.join(coords_df, on = "umi").sort_values("enrichment")
-
-  
-  
-  return json.dumps([list(e) for e in  umi_ids_to_idxs[["idx","enrichment"]].values])
+  return json.dumps([list(e) for e in  wholecells[["segment","enrichment"]].values])
 
 @app.route("/queries/umis/alignments/<dataset>/<query>/")
 def umialignments(dataset,query):

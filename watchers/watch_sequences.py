@@ -48,6 +48,7 @@ def _create_tmpfiles(folder, dataset,reset_tmpfiles):
 
     
 def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
+
     force_resets_step = kwargs.get("force_resets_step",[])
     force_resets_dataset = kwargs.get("force_resets_dataset",[])
     reset_tmpfiles = kwargs.get("reset_tmpfiles")
@@ -185,6 +186,9 @@ def loop_queue(**kwargs):
     #create a list of users from all datasets
     users = set([v["userId"] for k,v in list( datasets.items())])
 
+    forced_resets = kwargs.get("force_resets_dataset", [])
+    print(forced_resets)
+
     for u in users:
         #for each user, look at the list of all uploaded files, searching for unique dataset ids
         fpath = os.path.join(DATAROOT,"", u)
@@ -200,7 +204,9 @@ def loop_queue(**kwargs):
             if len(matched)==1:
                 k,d = matched[0]
                 #check job status on the server
-                if d["server_process_status"] =="COMPLETE": continue
+               
+                if (d["dataset"] not in forced_resets) and (d["server_process_status"] =="COMPLETE"):
+                    continue
                 #process the upload if necessary
                 process_dataset(fpath, d, k, **kwargs)
             else:
@@ -227,6 +233,7 @@ def main():
 
     force_resets_dataset = []
     if args.rd:
+
         force_resets_dataset = [args.rd]
         
     while 1:

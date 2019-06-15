@@ -136,40 +136,40 @@ def init_go_terms(tmpfolder, dataset):
     ontologies_by_symbol["GO_NAME"] = ontologies_by_symbol.GO_ID.apply(lambda x: go[x].name).rename("GO_NAME")
     umi2go=umi2txall.drop_duplicates(["umi","symbol"]).join(ontologies_by_symbol, on="symbol" )
     
-    cnt = -1
-    slen = len(segments)
-    for i,s in enumerate(segments):
-        cnt+=1
-        umis = [str(e) for e in segdf.loc[segdf.seg ==s].umi]
+    # cnt = -1
+    # slen = len(segments)
+    # for i,s in enumerate(segments):
+    #     cnt+=1
+    #     umis = [str(e) for e in segdf.loc[segdf.seg ==s].umi]
 
-        ss2 = umi2tx.loc[umi2tx.umi.isin(umis)].join(TX_INFO,on="transcript")[["umi","ensembl_gene","ncbi_gene","symbol"]].drop_duplicates()
+    #     ss2 = umi2tx.loc[umi2tx.umi.isin(umis)].join(TX_INFO,on="transcript")[["umi","ensembl_gene","ncbi_gene","symbol"]].drop_duplicates()
 
-        go_ids = []
-        for k, g in ss2.groupby("umi"):
-            for sym in g. symbol:
-                els = a0.index[a0.DB_Object_Symbol.searchsorted(sym,"left"):a0.DB_Object_Symbol.searchsorted(sym,"right")]
-                go_ids+= list(set(list(a0.loc[els].GO_ID.values)))
+    #     go_ids = []
+    #     for k, g in ss2.groupby("umi"):
+    #         for sym in g. symbol:
+    #             els = a0.index[a0.DB_Object_Symbol.searchsorted(sym,"left"):a0.DB_Object_Symbol.searchsorted(sym,"right")]
+    #             go_ids+= list(set(list(a0.loc[els].GO_ID.values)))
 
 
-        gonames = pd.DataFrame([{"segment":s,
-                                "go_name":gn,
-                                "go_id":gid}
-                               for gn,gid in [[go[gid].name,gid] for gid in go_ids]])
+    #     gonames = pd.DataFrame([{"segment":s,
+    #                             "go_name":gn,
+    #                             "go_id":gid}
+    #                            for gn,gid in [[go[gid].name,gid] for gid in go_ids]])
 
-        segment_symbols = segment_symbols.append(ss2)
+    #     segment_symbols = segment_symbols.append(ss2)
 
-        if len(gonames) == 0: continue
-        segment_counts = gonames.drop_duplicates().join(gonames.go_id.value_counts().rename("count"),on="go_id")
-        segment_gonames = segment_gonames.append(segment_counts)
+    #     if len(gonames) == 0: continue
+    #     segment_counts = gonames.drop_duplicates().join(gonames.go_id.value_counts().rename("count"),on="go_id")
+    #     segment_gonames = segment_gonames.append(segment_counts)
 
-        if cnt %50 == 0: print (f"{i} of {slen} segments processed")
-        #if cnt>100:break
+    #     if cnt %50 == 0: print (f"{i} of {slen} segments processed")
+    #     #if cnt>100:break
         
     OUTDIR_GO=os.path.join( f"/data/dd-analysis/datasets/{dataset['dataset'] }/goterms/")    
     if not os.path.isdir(OUTDIR_GO): os.makedirs(OUTDIR_GO)
 
     
-    segment_gonames.to_csv(os.path.join(OUTDIR_GO, "segments2go.csv"),index=False)
+    #segment_gonames.to_csv(os.path.join(OUTDIR_GO, "segments2go.csv"),index=False)
     
     umis2go_out =umis2go_out = pd.concat([umi2go.umi,umi2go.GO_NAME,umi2go.GO_ID],axis=1).drop_duplicates()
     umis2go_out.to_csv(os.path.join(OUTDIR_GO, "umis2go.csv"),index=False)
@@ -178,7 +178,7 @@ def init_go_terms(tmpfolder, dataset):
         
     OUTDIR_GS=os.path.join( f"/data/dd-analysis/datasets/{dataset['dataset'] }/genesymbols/")    
     if not os.path.isdir(OUTDIR_GS): os.makedirs(OUTDIR_GS)
-    segment_symbols.to_csv(os.path.join(OUTDIR_GS, "segment_symbols.csv"),index = False)
+    # segment_symbols.to_csv(os.path.join(OUTDIR_GS, "segment_symbols.csv"),index = False)
     umi_symbols = umi2txall[["umi","symbol","desc","ensembl_gene","ncbi_gene"]]     
     umi_symbols.to_csv(os.path.join(OUTDIR_GS,"umi_symbols.csv"),index= False)
     

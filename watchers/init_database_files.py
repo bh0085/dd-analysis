@@ -18,7 +18,7 @@ def init_database_files(inp_folder, dataset):
     annotation_data_pd = pd.read_csv(
         featfn, names=["unused_id", "molecule_type", "ar", "tr", "sequence"])
     seg_data_pd = pd.read_csv(
-        segfn, names=["seg20", "unk1", "unk2", "unk3", "unk4", "unk5", ])
+        segfn, names=["ignored_idx", "seg20", "unk2", "unk3", "unk4", "unk5", ])
 
     umis2go_path = os.path.join(DATASETS_ROOT, nm, "goterms/umis2go.csv")
     umis2geneids_path = os.path.join(
@@ -29,10 +29,6 @@ def init_database_files(inp_folder, dataset):
         {"umi": "umi_idx", "GO_NAME": "go_name", "GO_ID": "go_id"}, axis=1)
 
 
-    segments2go_path = os.path.join(DATASETS_ROOT, nm, "goterms/segments2go.csv")
-    segments2go = pd.read_csv(segments2go_path).dropna().rename(
-        {"umi": "umi_idx", "GO_NAME": "go_name", "GO_ID": "go_id"}, axis=1)
-
     for df in [coord_data_pd, annotation_data_pd, seg_data_pd]:
             df.index = coord_data_pd.index.rename("idx")
             df["dsid"] = int(nm[:8])
@@ -41,22 +37,27 @@ def init_database_files(inp_folder, dataset):
             df.index = df.index.rename("ignored_index")
             df["dsid"] = int(nm[:8])
             
-    segments2go.index = segments2go.index.rename("ignored_index")
     #produce a small gzip output file having x,y,t for each point
     cfpath = os.path.join(out_folder, "database_coords.csv")
     afpath = os.path.join(out_folder, "database_annotations.csv")
     sfpath = os.path.join(out_folder, "database_segments.csv")
 
-    # coord_data_pd.to_csv(os.path.join(out_folder,"database_coords.csv"))
-    # annotation_data_pd.to_csv(os.path.join(out_folder,"database_coords.csv"))
-    # seg_data_pd.to_csv(os.path.join(out_folder,"database_coords.csv"))
+    coord_data_pd.to_csv(cfpath)
+    annotation_data_pd.to_csv(afpath)
+    seg_data_pd.to_csv(sfpath)
+
+
+    coord_data_pd.to_csv(cfpath+".gz", compression='gzip')
+    annotation_data_pd.to_csv(afpath+".gz", compression='gzip')
+    seg_data_pd.to_csv(sfpath+".gz", compression='gzip')
+
 
     umidata = pd.concat([coord_data_pd[["x", "y", "dsid"]], annotation_data_pd[[
                         "molecule_type", "sequence"]], seg_data_pd[['seg20']]], axis=1)
     umidata.to_csv(os.path.join(out_folder, "database_umis.csv"))
     umis2geneids.to_csv(os.path.join(out_folder, "database_geneids.csv"))
     umis2go.to_csv(os.path.join(out_folder, "database_umi2go.csv"))
-    segments2go.to_csv(os.path.join(out_folder, "database_seg2go.csv"))
+
 
 
     return 0

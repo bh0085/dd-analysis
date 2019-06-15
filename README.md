@@ -21,4 +21,5 @@ create database dd;
 create user ben_coolship_io;
 grant all privileges on database dd to ben_coolship_io;
 ALTER USER ben_coolship_io WITH password  'password';
+CREATE EXTENSION pg_trgm;
 `
