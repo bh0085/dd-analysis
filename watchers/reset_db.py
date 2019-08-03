@@ -9,12 +9,15 @@ Drop all tables of database you given.
 """
 
 
+print("starting")
 try:
+    print("connecting")
     conn = psycopg2.connect( "postgres://ben_coolship_io:password@localhost/dd")
     print(conn)
     conn.set_isolation_level(0)
 except:
     print ("Unable to connect to the database.")
+    raise Exception("exiting")
 
 
 print(conn)

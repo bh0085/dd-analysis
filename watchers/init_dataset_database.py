@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from dataset_models import db, meta, session, NcbiGene,Segment, EnsemblGene, UmiGeneId, UmiGoTerm, Umi, Dataset, GoTerm
+from dataset_models import db, meta, session, NcbiGene,Segment, EnsemblGene, UmiGeneId, GeneGoTerm, Umi, Dataset, GoTerm
 from _config import DATASETS_ROOT
 
 def init_dataset_database(folder, dataset):
@@ -24,10 +24,10 @@ def init_dataset_database(folder, dataset):
     database_files_folder = os.path.join(dataset_folder, "database_init_files")
     umi_data = pd.read_csv(os.path.join(database_files_folder,"database_umis.csv"),index_col="idx")
     geneid_data = pd.read_csv(os.path.join(database_files_folder,"database_geneids.csv"),index_col="ignored_index")
-    umi_go_data = pd.read_csv(os.path.join(database_files_folder,"database_umi2go.csv"),index_col="ignored_index")
+    gene_go_data = pd.read_csv(os.path.join(database_files_folder,"database_gene2go.csv"))
     dataset_data= pd.DataFrame(pd.Series({"id":int(dskey),"name":"dataset1"})).T.set_index("id")
 
-    print (f"{len(dataset_data)} datasets, {len(umi_data)} umis, {len(umi_go_data)} go terms")
+    print (f"{len(dataset_data)} datasets, {len(umi_data)} umis, {len(gene_go_data)} go terms")
     print("entering umi & dataset info")
     dataset_data.to_sql("dataset",db, if_exists='append')
 
@@ -54,7 +54,7 @@ def init_dataset_database(folder, dataset):
     existing_ens_ids = set([e[0] for e in session.query(EnsemblGene.geneid).all()])
     ens_genedata = ens_genedata.loc[~ens_genedata.geneid.isin(existing_ens_ids)]
 
-    goterm_data = umi_go_data[["go_name","go_id"]].drop_duplicates(["go_id"])
+    goterm_data = gene_go_data[["go_name","go_id"]].drop_duplicates(["go_id"])
     existing_goterms = set([e[0] for e in session.query(GoTerm.go_id).all()])
     goterm_data = goterm_data.loc[~goterm_data.go_id.isin(existing_goterms)]
 
@@ -72,8 +72,8 @@ def init_dataset_database(folder, dataset):
  
     print("entering additional gene information")
     #transform UMIX x GO ids to newly assigned ids
-    umi_go_data["umi_id"] = umi_go_data["umi_idx"].apply(lambda x: umi_map[x])
-    umi_go_data[["umi_id","go_id"]].to_sql("umigoterm",db, if_exists='append',index = False)
+    #gene_go_data["umi_id"] = umi_go_data["umi_idx"].apply(lambda x: umi_map[x])
+    gene_go_data[["ncbi_gene","go_id"]].to_sql("genegoterm",db, if_exists='append',index = False)
     #segment_go_data.to_sql("segmentgoterm",db, if_exists='append',index = False)
 
 

@@ -15,8 +15,10 @@ def _align_reads(tmpfolder,dataset):
     
     nm = dataset["dataset"]
     featfn = os.path.join(tmpfolder, "xumi_feat_"+nm)
+    
     annotations = pd.read_csv(featfn, names = [a[0] for a in annotation_cols]) # parse annotation_file( featfn)
-    sequences = annotations.seq
+    sequences = annotations.seq.fillna("N")
+    
     database_data_dir  = os.path.join(DATA_DIR,"datasets",dataset["dataset"])
     tophat_dir = f"/data/dd-analysis/datasets/{dataset['dataset']}/tophat/"
     sfn = os.path.join(tophat_dir, "raw_sequences.fa")
@@ -30,7 +32,6 @@ def _align_reads(tmpfolder,dataset):
     if not os.path.isdir(OUTDIR): os.makedirs(OUTDIR)
     
     cmds = ["tophat" , "--output-dir" ,OUTDIR,  GENOME_BWT, sfn]
-    print(cmds)
     out = spc.call(cmds)
     
     

@@ -45,10 +45,10 @@ class UmiGeneId(base):
     ncbi_geneid = Column(Integer, ForeignKey("ncbigene.geneid", ondelete="CASCADE"),index = True) 
     ensembl_geneid = Column(String, ForeignKey("ensemblgene.geneid", ondelete="CASCADE"),index = True) 
 
-class UmiGoTerm(base):
-    __tablename__= "umigoterm"
+class GeneGoTerm(base):
+    __tablename__= "genegoterm"
     id = Column(Integer, primary_key = True, autoincrement=True)
-    umi_id = Column(Integer, ForeignKey("umi.id"))
+    ncbi_gene= Column(Integer, ForeignKey("ncbigene.geneid"))
     go_id = Column(String, ForeignKey("goterm.go_id"))
 
 class EnsemblGene(base):
@@ -105,14 +105,14 @@ class Umi(base):
               )
               
 
-    goterms = relationship("GoTerm", 
-    cascade="all,delete", 
-    secondary="umigoterm",
-    backref= "umis")
-    genes = relationship("NcbiGene", 
-        cascade="all,delete",
-        secondary="umigeneid",
-        backref = "umis")
+    # goterms = relationship("GoTerm", 
+    # cascade="all,delete", 
+    # secondary="umigoterm",
+    # backref= "umis")
+    # genes = relationship("NcbiGene", 
+    #     cascade="all,delete",
+    #     secondary="umigeneid",
+    #     backref = "umis")
 
 
 meta = base.metadata

@@ -27,6 +27,8 @@ ontologies = pd.DataFrame.from_dict(records)
 
 def init_go_terms(tmpfolder, dataset):
     dsname = dataset["dataset"]
+
+    print( tmpfolder, dataset )
     
     #READ TRANSCRIPT ALIGNMENTS
     samfile = pysam.AlignmentFile("/data/dd-analysis/datasets/{}/tophat/accepted_hits.bam".format(dsname), "rb")
@@ -123,18 +125,12 @@ def init_go_terms(tmpfolder, dataset):
     #for each cell in the selected segmentation, list all transcripts (with counts)
     #that appear
     
-    segments = segdf.seg.unique()
-    #segment1_symbols = {}
-    #segment1_goterms = {}
 
-    segment_symbols = pd.DataFrame()
-    segment_goterms = pd.DataFrame()
-    segment_gonames = pd.DataFrame()
 
     umi2txall = umi2tx.join( TX_INFO,on = "transcript")
     ontologies_by_symbol = ontologies.set_index(ontologies.DB_Object_Symbol)
     ontologies_by_symbol["GO_NAME"] = ontologies_by_symbol.GO_ID.apply(lambda x: go[x].name).rename("GO_NAME")
-    umi2go=umi2txall.drop_duplicates(["umi","symbol"]).join(ontologies_by_symbol, on="symbol" )
+    #umi2go=umi2txall.drop_duplicates(["umi","symbol"]).join(ontologies_by_symbol, on="symbol" )
     
     # cnt = -1
     # slen = len(segments)
@@ -170,9 +166,16 @@ def init_go_terms(tmpfolder, dataset):
 
     
     #segment_gonames.to_csv(os.path.join(OUTDIR_GO, "segments2go.csv"),index=False)
-    
-    umis2go_out =umis2go_out = pd.concat([umi2go.umi,umi2go.GO_NAME,umi2go.GO_ID],axis=1).drop_duplicates()
-    umis2go_out.to_csv(os.path.join(OUTDIR_GO, "umis2go.csv"),index=False)
+        
+
+    gene2go=umi2txall.drop_duplicates(["symbol"]).join(ontologies_by_symbol, on="symbol" )
+    genes2go_out = gene2go[["GO_NAME","GO_ID","symbol","ncbi_gene"]].drop_duplicates()
+
+    genes2go_out.to_csv(os.path.join(OUTDIR_GO, "genes2go.csv"),index=False)
+
+
+    # umis2go_out =umis2go_out = pd.concat([umi2go.umi,umi2go.GO_NAME,umi2go.GO_ID],axis=1).drop_duplicates()
+    # umis2go_out.to_csv(os.path.join(OUTDIR_GO, "umis2go.csv"),index=False)
    
 
         
