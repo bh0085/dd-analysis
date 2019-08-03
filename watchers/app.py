@@ -50,7 +50,6 @@ def get_results(job_key):
         return str(job.result), 200
     else:
         return "Nay!", 202
-    
 
 def sample_save_text(inp_txt):
     import random
@@ -126,13 +125,6 @@ def cellgoterms(dataset,goterm_query):
 
   return json.dumps([list(e) for e in  wholecells[["segment","enrichment"]].values])
 
-@app.route("/queries/umis/alignments/<dataset>/<query>/")
-def umialignments(dataset,query):
-  return []
-
-@app.route("/queries/umis/spliced/<dataset>/<query>/")
-def umispliced(dataset,query):
-  return []
 
 @app.route("/queries/umis/sequence/<dataset>/<query>/")
 def umis_by_sequence(dataset,query):
