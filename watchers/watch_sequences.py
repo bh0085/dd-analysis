@@ -9,7 +9,12 @@ from init_tophat_transcripts import init_tophat_transcripts
 from init_go_terms import init_go_terms
 from init_coords_and_colors import init_color_buffers, init_xy_buffers
 from init_frontend import init_frontend
+from init_postprocessing_frontend import init_postprocessing_frontend
 from init_dataset_database import init_dataset_database
+
+#functions which run after database initialization
+from init_segmentations import init_segmentations
+
 
 from shutil import copyfile
 from init_database_files import init_database_files
@@ -51,6 +56,7 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
 
     force_resets_step = kwargs.get("force_resets_step",[])
     force_resets_dataset = kwargs.get("force_resets_dataset",[])
+    force_reset_all = kwargs.get("force_reset_all", False)
     reset_tmpfiles = kwargs.get("reset_tmpfiles")
 
     status = dataset["server_process_status"]
@@ -68,6 +74,8 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
         "INIT_COLOR_BUFFERS":"INIT_COLOR_BUFFERS",
         "INIT_DATABASE_FILES":"INIT_DATABASE_FILES",
         "INIT_DATASET_DATABASE":"INIT_DATASET_DATABASE",
+        "INIT_SEGMENTATIONS":"INIT_SEGMENTATIONS",
+        "INIT_POSTPROCESSING_FRONTEND":"INIT_POSTPROCESSING_FRONTEND",
     }
     #enumerate job statuses
     status = {
@@ -86,7 +94,8 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
         "INIT_COLOR_BUFFERS":init_color_buffers,
         "INIT_DATABASE_FILES":init_database_files,
         "INIT_DATASET_DATABASE":init_dataset_database,
-
+        "INIT_SEGMENTATIONS":init_segmentations,
+        "INIT_POSTPROCESSING_FRONTEND":init_postprocessing_frontend,
     }
 
 
@@ -102,10 +111,25 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
     root.update({dataset_key:val})
     
     for k,v in jobs.items():
-        if dataset["dataset"] in force_resets_dataset:
-            print("resetting", v, f"for {dataset['dataset']}")
+        if force_reset_all:
             val["server_job_statuses"][v] = "WAITING"
             continue
+
+        print(force_resets_dataset)
+        if dataset["dataset"] in force_resets_dataset:
+            
+            if len(force_resets_step) > 0:
+                print("checking")
+                #reset this step if forced
+                if k in force_resets_step:
+                    print("resetting ", v)
+                    print("resetting forced step for ", v)
+                    val["server_job_statuses"][v] = "WAITING"
+                    continue
+            else:
+                print("resetting all steps ", v, f"for {dataset['dataset']}")
+                val["server_job_statuses"][v] = "WAITING"
+                continue
 
         #reset this step if forced
         if v in force_resets_step:
@@ -127,6 +151,8 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
 
     tmpdir = _create_tmpfiles(gcs_folder, dataset,reset_tmpfiles = reset_tmpfiles)
     dskey = dataset_key
+
+    process_allafter= False
     
     #TODO: REPLACE ALL JOB QUEUEING WITH THIS LOOP
     for jobkey in [
@@ -137,16 +163,21 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
         "INIT_XY_BUFFERS", 
         "INIT_COLOR_BUFFERS",
         "INIT_DATABASE_FILES",
-        "INIT_DATASET_DATABASE"]:
+        "INIT_DATASET_DATABASE",    #must follow database files creation
+        "INIT_SEGMENTATIONS",       #must follow database creation
+        "INIT_POSTPROCESSING_FRONTEND",
+        ]:
 
         #pass additional args (such as the storage key)
         #if a job requires it
         kw = {
             "key":dskey
-        } if jobkey == "INIT_FRONTEND" else {}
+        } if (jobkey in ["INIT_FRONTEND","INIT_POSTPROCESSING_FRONTEND"]) else {}
 
         jobname = jobs[jobkey]
-        if get_jobstatus(dataset_key, jobname) == "WAITING":
+        if (get_jobstatus(dataset_key, jobname) == "WAITING" ) or (process_allafter):
+
+            process_allafter = True # if we reset one function, overrwrite all after
             set_jobstatus(dataset_key, jobname, status["RUNNING"])
             try: output_status = jobfuns[jobname](tmpdir,dataset, **kw)
             except Exception as e:
@@ -154,6 +185,7 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
                 raise(e)
             if output_status == 0:
                 set_jobstatus(dataset_key,jobname, status["COMPLETE"])
+
             else: raise Exception(f"nonzero output status for {jobname}")
     
            
@@ -164,7 +196,6 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
     
     val["server_process_status"] = status["COMPLETE"]
     root.update({dataset_key:val})
-    
     root.update({dskey:val})
     
     return
@@ -186,9 +217,11 @@ def loop_queue(**kwargs):
     #create a list of users from all datasets
     users = set([v["userId"] for k,v in list( datasets.items())])
 
+    force_reset_all = kwargs.get("force_reset_all",False)
     forced_resets = kwargs.get("force_resets_dataset", [])
     print(forced_resets)
 
+    print(users)
     for u in users:
         #for each user, look at the list of all uploaded files, searching for unique dataset ids
         fpath = os.path.join(DATAROOT,"", u)
@@ -198,16 +231,20 @@ def loop_queue(**kwargs):
         #identify all files which can be matched to a dataset
         filtered_sorted = sorted([u for u in userfiles if dsre.search(u)],key= lambda x: dsre.search(x).group())
         #cycle through dataset file groups
+
         for dataset, g in it.groupby(filtered_sorted,lambda x:dsre.search(x).group()):
+
+            print(dataset)
             #check firebase for a database record associated with the uploaded files
             matched = [ (k, d) for k,d in datasets.items() if d["dataset"] ==dataset]
             if len(matched)==1:
                 k,d = matched[0]
                 #check job status on the server
                
-                if (d["dataset"] not in forced_resets) and (d["server_process_status"] =="COMPLETE"):
+                if (not force_reset_all) and (d["dataset"] not in forced_resets) and (d["server_process_status"] =="COMPLETE"):
                     continue
                 #process the upload if necessary
+                print("PROCESSING")
                 process_dataset(fpath, d, k, **kwargs)
             else:
                 print (f"no matching firebase entry found for dataset files {dataset}")
@@ -216,6 +253,9 @@ def loop_queue(**kwargs):
 def main():
     import argparse
     parser = argparse.ArgumentParser(description='Watch for webserver file uploads and process datasets, finding genome alignments and functional annotations.')
+    parser.add_argument('--reset-all', dest="ra", action='store_const',
+                    const=True, default=False,
+                    help='Reset all steps of all datasets')
     parser.add_argument('--reset-dataset', dest="rd", nargs='?')
     parser.add_argument('--reset-step', dest="rs", nargs='?')
     parser.add_argument('--noloop', dest='noloop', action='store_const',
@@ -233,13 +273,15 @@ def main():
 
     force_resets_dataset = []
     if args.rd:
-
         force_resets_dataset = [args.rd]
+    
+    force_reset_all = args.ra
         
     while 1:
         loop_queue(force_resets_step = force_resets_step,
             force_resets_dataset = force_resets_dataset,
-                   reset_tmpfiles = args.reset_tmpfiles)
+                   reset_tmpfiles = args.reset_tmpfiles,
+                   force_reset_all = force_reset_all)
         
         if args.noloop: break
     exit

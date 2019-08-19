@@ -68,15 +68,9 @@ def make_files(inp_folder, dataset):
     }
 
 
-
-def process_frontend(folder, dataset):
-    #get transformed files
-    files_for_upload = make_files(folder, dataset)
-    return files_for_upload
-
 def init_frontend(tmpdir, dataset, key = None):
     if not key: raise Exception()
-    files_for_upload = process_frontend(tmpdir,dataset)
+    files_for_upload =  make_files(folder, dataset)
     upload_frontend_files(files_for_upload,dataset,key)
     return 0
 
@@ -113,6 +107,7 @@ def upload_frontend_files(files,dataset, dataset_key):
                 cfname = bucket_fn
            
 
+
     val = root.get()[dataset_key]
 
     val.update(dict(
@@ -126,6 +121,3 @@ def upload_frontend_files(files,dataset, dataset_key):
     })
 
     root.update({dataset_key:val})
-
-
-

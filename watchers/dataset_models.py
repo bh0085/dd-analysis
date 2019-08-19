@@ -1,6 +1,6 @@
 
 from sqlalchemy import create_engine , cast, Index, func
-from sqlalchemy import Column, String, Integer, Float, ForeignKey, ForeignKeyConstraint
+from sqlalchemy import Column, String, Integer, Float, ForeignKey, Boolean, ForeignKeyConstraint
 from sqlalchemy.ext.declarative import declarative_base  
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import relationship
@@ -35,21 +35,35 @@ class Segment(base):
     id = Column(Integer, primary_key = True, autoincrement = True)
     dsid = Column(Integer, ForeignKey("dataset.id", ondelete="CASCADE"), index = True)
     og_segid = Column(Integer)
+
+    eval0 = Column(Float)
+    eval1 = Column(Float)
+
+    evec0x = Column(Float)
+    evec0y = Column(Float)
+    evec1x = Column(Float)
+    evec1y = Column(Float)
+
+    meanx = Column(Float, index = True)
+    meany = Column(Float, index = True)
+    n_umis = Column(Integer)
+
     umis = relationship("Umi", cascade="all,delete" ,backref="segment")
+
     
 class UmiGeneId(base):
     __tablename__ = "umigeneid"
     id = Column(Integer, primary_key = True, autoincrement = True)
     #dsid = Column(Integer,index = True)
-    umi_id = Column(Integer, ForeignKey("umi.id"), index = True )
+    umi_id = Column(Integer, ForeignKey("umi.id", ondelete="CASCADE"), index = True )
     ncbi_geneid = Column(Integer, ForeignKey("ncbigene.geneid", ondelete="CASCADE"),index = True) 
     ensembl_geneid = Column(String, ForeignKey("ensemblgene.geneid", ondelete="CASCADE"),index = True) 
 
 class GeneGoTerm(base):
     __tablename__= "genegoterm"
     id = Column(Integer, primary_key = True, autoincrement=True)
-    ncbi_gene= Column(Integer, ForeignKey("ncbigene.geneid"))
-    go_id = Column(String, ForeignKey("goterm.go_id"))
+    ncbi_gene= Column(Integer, ForeignKey("ncbigene.geneid", ondelete="CASCADE"))
+    go_id = Column(String, ForeignKey("goterm.go_id", ondelete="CASCADE"))
 
 class EnsemblGene(base):
     __tablename__= "ensemblgene"
@@ -93,17 +107,29 @@ class Umi(base):
                 #second primary key, assigned according to the row in the original file
     x = Column(Float)
     y = Column(Float)
+
+    umap_x = Column(Float)
+    umap_y = Column(Float)
+    umap_z = Column(Float)
+
+    is_aligned_to_intron = Column(Boolean)
+    is_aligned_to_exon= Column(Boolean)
+
     seg20 = Column(Integer)
     seg = Column(Integer, ForeignKey("segment.id", ondelete="CASCADE"),index = True)
     molecule_type = Column(Integer)
     sequence = Column(String)
+    total_reads = Column(Integer)
+
+    xumi_xy = Column(Geometry('POINT'))
+    
 
     __table_args__ = (
     Index('idx_seq_tgm', "sequence",
               postgresql_ops={"sequence": "gin_trgm_ops"},
               postgresql_using='gin'),
               )
-              
+
 
     # goterms = relationship("GoTerm", 
     # cascade="all,delete", 
@@ -113,6 +139,13 @@ class Umi(base):
     #     cascade="all,delete",
     #     secondary="umigeneid",
     #     backref = "umis")
-
+    
+class GeoEdge(base):
+    __tablename__ = "geoedge"
+    id = Column(BigInteger, primary_key = True)
+    target_id = Column(Integer, ForeignKey("geoumi.id", ondelete="CASCADE"), index = True)
+    beacon_id = Column(Integer, ForeignKey("geoumi.id", ondelete="CASCADE"), index = True)
+    n_uei = Column(Integer)
+    
 
 meta = base.metadata

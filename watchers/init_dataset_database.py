@@ -14,9 +14,9 @@ def init_dataset_database(folder, dataset):
     print(matches)
     if matches:
         print(matches)
-        session.delete(matches)
+        session.query(Dataset).filter(Dataset.id == dskey).delete()
         session.commit()
-
+        
     print("done")
     dataset_folder = os.path.join(DATASETS_ROOT,d)
 

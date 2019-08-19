@@ -16,7 +16,7 @@ def init_database_files(inp_folder, dataset):
 
     coord_data_pd = pd.read_csv(basefn, names=["unused_id", "x", "y"])
     annotation_data_pd = pd.read_csv(
-        featfn, names=["unused_id", "molecule_type", "ar", "tr", "sequence"])
+        featfn, names=["unused_id", "molecule_type", "ar", "total_reads", "sequence"])
     seg_data_pd = pd.read_csv(
         segfn, names=["ignored_idx", "seg20", "unk2", "unk3", "unk4", "unk5", ])
 
@@ -59,7 +59,7 @@ def init_database_files(inp_folder, dataset):
 
 
     umidata = pd.concat([coord_data_pd[["x", "y", "dsid"]], annotation_data_pd[[
-                        "molecule_type", "sequence"]], seg_data_pd[['seg20']]], axis=1)
+                        "molecule_type", "sequence","total_reads"]], seg_data_pd[['seg20']]], axis=1)
     umidata.to_csv(os.path.join(out_folder, "database_umis.csv"))
     umis2geneids.to_csv(os.path.join(out_folder, "database_geneids.csv"))
     #umis2go.to_csv(os.path.join(out_folder, "database_umi2go.csv"))
