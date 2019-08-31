@@ -5,30 +5,36 @@ import pandas as pd
 import numpy as np
 
 from flask_cors import CORS
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+
+
 app = Flask(__name__,static_url_path='') 
 
+app.config['SQLALCHEMY_DATABASE_URI'] = "postgres://ben_coolship_io:password@localhost/dd"
 
 
 from flask import Flask, request, send_from_directory
-
 import io
 
-#cors = CORS(app, resources={r"/*": {"origins": "*"}})
-#from flask_cors import CORS
-#CORS(app)
-#api = Api(app)
-
-
-
-
-
 import exports, queries
-from dataset_models import Umi, session, db, Dataset, GeneGoTerm, UmiGeneId, GoTerm, NcbiGene, Segment
+from dataset_models import Umi, Dataset, GeneGoTerm, UmiGeneId, GoTerm, NcbiGene, Segment, db2
 rsq = pd.read_sql_query
-sq = session.query
 from sqlalchemy import desc, asc, func, distinct
 
+db2.init_app(app) 
+migrate = Migrate(app, db2)
+
+from db import Session
+from flask_sqlalchemy_session import flask_scoped_session
+session = flask_scoped_session(Session, app)
+
+sq = session.query
+db = session.connection()
+
+
 queries = {}
+
 
 
 @app.after_request
@@ -123,6 +129,7 @@ def segmentations_by_xy(dataset):
   query_df = rsq(sq(Segment).filter(Segment.dsid==getDatasetId(dataset))\
     .filter(Segment.meanx >= x0).filter( Segment.meanx <= x1).filter( Segment.meany >= y0).filter( Segment.meany <= y1).statement,db)
   return query_df.to_json(orient = "index")
+
 
 import gzip
 @app.route("/segmentations/<dataset>/winning")

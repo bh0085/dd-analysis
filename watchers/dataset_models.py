@@ -1,13 +1,20 @@
 
 from sqlalchemy import create_engine , cast, Index, func
-from sqlalchemy import Column, String, Integer, Float, ForeignKey, Boolean, ForeignKeyConstraint
-from sqlalchemy.ext.declarative import declarative_base  
+from sqlalchemy import Column, String, Integer, Float, ForeignKey, Boolean, ForeignKeyConstraint, BigInteger
+from geoalchemy2 import Geometry, Raster
+
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.compiler import compiles
-from sqlalchemy_repr import RepresentableBase
+
 from sqlalchemy import types
 from sqlalchemy.dialects import postgresql
+
+#from sqlalchemy.ext.declarative import declarative_base  
+#from sqlalchemy_repr import RepresentableBase
+
+from flask_sqlalchemy import SQLAlchemy
+db2 = SQLAlchemy()
 
 def create_tsvector(*args):
     exp = args[0]
@@ -15,14 +22,13 @@ def create_tsvector(*args):
         exp += ' ' + e
     return func.to_tsvector('english', exp)
 
-db_string = "postgres://ben_coolship_io:password@localhost/dd"
-db = create_engine(db_string)  
-base = declarative_base(bind = db,cls=RepresentableBase)
-Session = sessionmaker(db)  
-session = Session()
+#db_string = "postgres://ben_coolship_io:password@localhost/dd"
+#db = create_engine(db_string)  
+#Session = sessionmaker(db)  
+#session = Session()
 
 
-class Dataset(base):
+class Dataset(db2.Model):
     __tablename__ = 'dataset'
     id = Column(Integer, primary_key = True)
     name = Column(String)
@@ -30,7 +36,7 @@ class Dataset(base):
     segments = relationship("Segment", cascade = "all,delete", backref="dataset")
 
     
-class Segment(base):
+class Segment(db2.Model):
     __tablename__ = "segment"
     id = Column(Integer, primary_key = True, autoincrement = True)
     dsid = Column(Integer, ForeignKey("dataset.id", ondelete="CASCADE"), index = True)
@@ -51,7 +57,7 @@ class Segment(base):
     umis = relationship("Umi", cascade="all,delete" ,backref="segment")
 
     
-class UmiGeneId(base):
+class UmiGeneId(db2.Model):
     __tablename__ = "umigeneid"
     id = Column(Integer, primary_key = True, autoincrement = True)
     #dsid = Column(Integer,index = True)
@@ -59,17 +65,17 @@ class UmiGeneId(base):
     ncbi_geneid = Column(Integer, ForeignKey("ncbigene.geneid", ondelete="CASCADE"),index = True) 
     ensembl_geneid = Column(String, ForeignKey("ensemblgene.geneid", ondelete="CASCADE"),index = True) 
 
-class GeneGoTerm(base):
+class GeneGoTerm(db2.Model):
     __tablename__= "genegoterm"
     id = Column(Integer, primary_key = True, autoincrement=True)
     ncbi_gene= Column(Integer, ForeignKey("ncbigene.geneid", ondelete="CASCADE"))
     go_id = Column(String, ForeignKey("goterm.go_id", ondelete="CASCADE"))
 
-class EnsemblGene(base):
+class EnsemblGene(db2.Model):
     __tablename__= "ensemblgene"
     geneid = Column(String,primary_key = True)
 
-class NcbiGene(base):
+class NcbiGene(db2.Model):
     __tablename__= "ncbigene"
     geneid = Column(Integer,primary_key=True)
     symbol = Column(String,index = True)
@@ -91,13 +97,13 @@ class NcbiGene(base):
               postgresql_using='gin'),
     )
 
-class GoTerm(base):
+class GoTerm(db2.Model):
     __tablename__= "goterm"
     go_id = Column(String, primary_key=True)
     go_name = Column(String, index = True)
 
     
-class Umi(base):  
+class Umi(db2.Model):  
     __tablename__ = 'umi'
 
     id = Column(Integer, primary_key = True, autoincrement = True)
@@ -115,14 +121,17 @@ class Umi(base):
     is_aligned_to_intron = Column(Boolean)
     is_aligned_to_exon= Column(Boolean)
 
-    seg20 = Column(Integer)
-    seg = Column(Integer, ForeignKey("segment.id", ondelete="CASCADE"),index = True)
+    seg = Column(Integer, ForeignKey("segment.id", ondelete="CASCADE"),index = True)    
     molecule_type = Column(Integer)
     sequence = Column(String)
     total_reads = Column(Integer)
 
     xumi_xy = Column(Geometry('POINT'))
-    
+    umap_xyz = Column(Geometry('POINTZ'))
+
+    hull = Column(Geometry('POLYGON'))
+    center = Column(Geometry('POINT'))
+    kde_density = Column(Raster)
 
     __table_args__ = (
     Index('idx_seq_tgm', "sequence",
@@ -131,21 +140,11 @@ class Umi(base):
               )
 
 
-    # goterms = relationship("GoTerm", 
-    # cascade="all,delete", 
-    # secondary="umigoterm",
-    # backref= "umis")
-    # genes = relationship("NcbiGene", 
-    #     cascade="all,delete",
-    #     secondary="umigeneid",
-    #     backref = "umis")
-    
-class GeoEdge(base):
+class GeoEdge(db2.Model):
     __tablename__ = "geoedge"
     id = Column(BigInteger, primary_key = True)
-    target_id = Column(Integer, ForeignKey("geoumi.id", ondelete="CASCADE"), index = True)
-    beacon_id = Column(Integer, ForeignKey("geoumi.id", ondelete="CASCADE"), index = True)
+    target_id = Column(Integer, ForeignKey("umi.id", ondelete="CASCADE"), index = True)
+    beacon_id = Column(Integer, ForeignKey("umi.id", ondelete="CASCADE"), index = True)
     n_uei = Column(Integer)
     
 
-meta = base.metadata

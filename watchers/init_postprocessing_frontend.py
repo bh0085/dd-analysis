@@ -8,6 +8,8 @@ import numpy as np
 if not os.path.isdir("/data/tmp"):
     os.makedirs("/data/tmp")
 
+
+
 def make_pp_files(tmpdir, dataset):
     nm = dataset["dataset"]
     out_folder = os.path.join(f"/data/tmp/{nm}")
@@ -16,14 +18,23 @@ def make_pp_files(tmpdir, dataset):
 
 
     import gzip
-    from dataset_models import Umi, session, db, Dataset, GeneGoTerm, UmiGeneId, GoTerm, NcbiGene, Segment
+
+
+    # db_string = "postgres://ben_coolship_io:password@localhost/dd"
+    # db2 = create_engine(db_string)  
+    # Session = sessionmaker(db2)  
+    # session = Session()
+
+    from dataset_models import Umi,  Dataset, GeneGoTerm, UmiGeneId, GoTerm, NcbiGene, Segment,LinkageCell
+    from db import session
+
     rsq = pd.read_sql_query
     sq = session.query
     getDatasetId =  lambda dsname: int(dsname[:8])
 
     #WRITE UMI METADATA TO A FILE
     umi_ids_path = os.path.join(out_folder,"umi_ids.json.gz")
-    umis_df = rsq(sq(Umi.idx,Umi.id,Umi.seg,Umi.umap_x,Umi.umap_y,Umi.umap_z).filter(Umi.dsid==getDatasetId(nm)).statement,db)
+    umis_df = rsq(sq(Umi.idx,Umi.umap_x,Umi.umap_y,Umi.umap_z,Umi.id,Umi.seg,Umi.lcell).filter(Umi.dsid==getDatasetId(nm)).statement,session.connection())
     print("umis")
     print(umis_df.iloc[:10])
     with gzip.open(umi_ids_path,"w") as f:
@@ -50,16 +61,35 @@ def make_pp_files(tmpdir, dataset):
     #WRITE SEGMENT METADATA TO A FILE
     segment_metadata_path = os.path.join(out_folder,"segment_metadata.json.gz")
     with gzip.open(segment_metadata_path,"w") as f:
+
         f.write(
             bytes(
-                rsq(sq(Segment).filter(Segment.dsid==getDatasetId(nm)).statement,db).set_index("id").to_json(orient="index"),'utf-8'
+                rsq(sq(Segment).filter(Segment.dsid==getDatasetId(nm)).statement,session.connection()).set_index("id").to_json(orient="index"),'utf-8'
         ))
+
+    #WRITE LINKAGE_SEGMENT METADATA TO A FILE
+    linkage_cell_metadata_path = os.path.join(out_folder,"linkage_segment_metadata.json.gz")
+    with gzip.open(linkage_cell_metadata_path,"w") as f:
+
+        from sqlalchemy.orm import joinedload
+        cell_objects = sq(LinkageCell).filter(LinkageCell.dsid ==getDatasetId(nm)).options(joinedload('umis')).all()        
+            
+                
+        out = pd.DataFrame({c.id:pd.Series({
+                "n_umis": len(c.umis),
+                "meanx" :np.mean([u.x for u in c.umis]) if len(c.umis) > 0 else None,
+                "meany" :np.mean([u.y for u in c.umis]) if len(c.umis) > 0 else None,
+                })
+            for c in cell_objects}).T
+        out.index.name = "id"
+        f.write(bytes(out.to_json(orient="index"),'utf-8' ))
 
     return {
         "umi_ids":umi_ids_path,
         "winning_segments_grid":winning_segments_grid_path,
         "passing_segments_grid":passing_segments_grid_path,
         "segment_metadata":segment_metadata_path,
+        "linkage_cell_metadata":linkage_cell_metadata_path,
     }
 
 def init_postprocessing_frontend(tmpdir, dataset, key= None):

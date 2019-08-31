@@ -1,10 +1,7 @@
-import dataset_models
-import imp
-imp.reload(dataset_models)
-
 import pandas as pd
-from dataset_models import Umi, session, db, Dataset, GeneGoTerm, UmiGeneId, GoTerm, NcbiGene, Segment
+from dataset_models import Umi, Dataset, GeneGoTerm, UmiGeneId, GoTerm, NcbiGene, Segment
 
+from db import session
 rsq = pd.read_sql_query
 sq = session.query
 
@@ -13,6 +10,18 @@ import pandas as pd
 import numpy as np
 import json, os
 from scipy import stats
+
+import pandas as pd
+import numpy as np
+import os
+import scipy
+from sqlalchemy import create_engine , cast, Index, func,ForeignKey
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, Integer, String,BigInteger
+from geoalchemy2 import Geometry
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import relationship
+
 
 getDatasetId =  lambda dsname: int(dsname[:8])
 
@@ -26,10 +35,10 @@ def init_segmentations(tmpfolder, dataset):
         os.makedirs(out_folder)
 
 
-    umis= rsq(sq(Umi).filter(Umi.dsid==getDatasetId(nm)).statement,db).rename({"id":"umi_id"},axis="columns").set_index("umi_id")
+    umis= rsq(sq(Umi).filter(Umi.dsid==getDatasetId(nm)).statement,session.connection()).rename({"id":"umi_id"},axis="columns").set_index("umi_id")
     # initialize segment information
     
-    segment_umis = rsq( sq(Umi.dsid,Umi.id.label("umi_id"),Umi.x,Umi.y,Segment.id.label("seg_id")).filter(Umi.dsid==getDatasetId(nm)).join(Segment).statement,db)
+    segment_umis = rsq( sq(Umi.dsid,Umi.id.label("umi_id"),Umi.x,Umi.y,Segment.id.label("seg_id")).filter(Umi.dsid==getDatasetId(nm)).join(Segment).statement,session.connection())
     
     seg_counts = segment_umis.seg_id.value_counts()
 
@@ -52,6 +61,9 @@ def init_segmentations(tmpfolder, dataset):
     # segs_with_dists = segs_with_dists.join(umis[["total_reads"]],on="umi_id")
     s_mean_xs =  segment_umis.groupby("seg_id").x.mean()
     s_mean_ys =  segment_umis.groupby("seg_id").y.mean()
+
+
+
     
     dbsegs = sq(Segment).filter(Segment.dsid == getDatasetId(nm)).all()
     for s in dbsegs:
