@@ -2,14 +2,10 @@
 from sqlalchemy import create_engine , cast, Index, func
 from sqlalchemy import Column, String, Integer, Numeric, Float, ForeignKey, Boolean, ForeignKeyConstraint, BigInteger
 from geoalchemy2 import Geometry, Raster
-import pandas as pd
 
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.compiler import compiles
-import numpy as np
-
-from geoalchemy2.functions import ST_Crosses, ST_AsGeoJSON
 
 from sqlalchemy import types
 from sqlalchemy.dialects import postgresql
@@ -28,10 +24,10 @@ def create_tsvector(*args):
         exp += ' ' + e
     return func.to_tsvector('english', exp)
 
-# db_string = "postgres://ben_coolship_io:password@localhost/dd"
-# db = create_engine(db_string)  
-# Session = sessionmaker(db)  
-# session = Session()
+#db_string = "postgres://ben_coolship_io:password@localhost/dd"
+#db = create_engine(db_string)  
+#Session = sessionmaker(db)  
+#session = Session()
 
 
 class Dataset(db2.Model):
@@ -104,8 +100,9 @@ class Umi(db2.Model):
 
     id = Column(Integer, primary_key = True, autoincrement = True)
     dsid = Column(Integer, ForeignKey("dataset.id", ondelete="CASCADE"), index = True)
+                #one of 2 primary keys, assigned from dataset
     idx = Column(Integer, index = True)
-
+                #second primary key, assigned according to the row in the original file
     x = Column(Float)
     y = Column(Float)
 
@@ -189,12 +186,6 @@ class Segment(db2.Model):
     center = Column(Geometry('POINT'))
     kde_density = Column(Raster)
 
-    points = Column(Geometry('MULTIPOINT'))
-    points12 = Column(Geometry('MULTIPOINT'))
-    points128 = Column(Geometry('MULTIPOINT'))
-    points_xym_total_reads = Column(Geometry('MULTIPOINTM'))
-    points_xym_kde = Column(Geometry('MULTIPOINTM'))
-
     umi_count = column_property(
         select([func.count(Umi.id)]).\
             where(Umi.seg==id).\
@@ -207,37 +198,14 @@ class Segment(db2.Model):
         #for k,v in out.items():
         #    if type(v) = type(np.array([])):
         #        out[k] = list(v)
-        return {k:getattr(self,k) 
-        for k in ["meanx","meany","id", "rgb", "xy", "area12",
-        #"kde_array_5"#, "umis_top_100_total_reads",
-        ]} #      "kde_array_100", "hull_xy",
+        return {k:getattr(self,k) for k in ["meanx","meany","id", "rgb", "xy",]# "area12"]} #      "kde_array_100", "hull_xy",
         #for k in ["meanx","meany","id", "rgb", "xy"]}
                          # ]})
 
 
-    def as_custom_frontend_dict(self,attrs):
-        out = {k:getattr(self,k) for k in attrs}
-        return out 
-
-    def as_detailed_frontend_dict(self):
-        #return({"x":"hi"})
-
-        out = {k:getattr(self,k) for k in ["meanx","meany","id", "rgb", "xy","points12_xy"]}#,"hull12", "kde_array_100"]}
-        # for k,v in out.items():
-        #     if type(v) == type(np.array([])):
-        #         out[k] = v.tolist()
-        return out
-        
-    
-    @property
-    def intersecting_cells(self):
-        from db import session
-        return session.query(Segment).filter(Segment.hull.ST_Intersects(self.hull)).all()
-
-
     @property
     def rgb(self):
-        return [int(256 * self.rval), int(256 * self.gval),int(256*self.bval)]
+        return [self.rval, self.gval, self.bval]
 
     @property
     def xy(self):
@@ -252,56 +220,8 @@ class Segment(db2.Model):
     def hull_obj(self):
         return WKBElement(self.hull) if type(self.hull)==type("STR") else self.hull
 
-    @property
-    def hull12_obj(self):
-        return WKBElement(self.hull12) if type(self.hull12)==type("STR") else self.hull12
-
-    @property
-    def hull128_obj(self):
-        return WKBElement(self.hull128) if type(self.hull128)==type("STR") else self.hull128
-
-
     kde_tiff_100 = column_property( 
         select([text("ST_AsTIFF(ST_Resize(kde_density,100,100))")]))
-
-    kde_tiff_20 = column_property(
-        select([text("ST_AsTIFF(ST_Resize(kde_density,20,20))")]))
-    
-    kde_tiff_5 = column_property(
-        select([text("ST_AsTIFF(ST_Resize(kde_density,5,5))")]))
-    
-    
-    umis_top_100_total_reads = column_property(
-    select([text(""" st_asgeojson(ST_Collect(pts.pt),3)
-FROM(
-SELECT    (g.gdump).geom as pt
-     FROM
-    (
-        SELECT ST_DumpPoints(segment.points_xym_kde ) AS gdump
-        FROM segment WHERE  id=id
-    ) AS g
-    ORDER BY ST_M((g.gdump).geom) DESC
-    LIMIT 10
-) AS pts
-""")]))
-
-    
-    
-    umis_top_100_kde = column_property(
-    select([text(""" st_asgeojson(ST_Collect(pts.pt),3)
-FROM(
-SELECT    (g.gdump).geom as pt
-     FROM
-    (
-        SELECT ST_DumpPoints(segment.points_xym_total_reads ) AS gdump
-        FROM segment WHERE  id=id
-    ) AS g
-    ORDER BY ST_M((g.gdump).geom) DESC
-    LIMIT 20
-) AS pts
-""")]))
-
-
 
     @property
     def hull_shape(self):
@@ -312,69 +232,8 @@ SELECT    (g.gdump).geom as pt
         return  [[float(x),float( y)] for x, y in zip(*self.hull_shape.exterior.xy)]
             
     @property
-    def hull12_xy(self):
-        pts = to_shape(self.hull12_obj).exterior.xy
-        pts_df = pd.DataFrame(pts).T.rename({0:"x",1:"y"},axis="columns")    
-        return pts_df.values.astype(float).tolist()
-
-    @property
-    def hull128_xy(self):
-        pts = to_shape(self.hull128_obj).exterior.xy
-        pts_df = pd.DataFrame(pts).T.rename({0:"x",1:"y"},axis="columns")    
-        return pts_df.values.astype(float).tolist()
-
-    # @property
-    # def points_xy(self):
-    #     #return (lambda x: np.reshape(np.array(x["data"]),x["shape"]))(to_shape(self.points).array_interface()).astype(float).tolist()
-        # return json.loads(sq(ST_AsGeoJSON(Segment.points)).filter(Segment.id.in_(ids)).one()[0])['coordinates']
-    
-    points_xy_geojson = column_property(
-        select([text("ST_AsGeoJSON(points, 2)")])
-    )
-
-    points12_xy_geojson = column_property(
-        select([text("ST_AsGeoJSON(points12, 2)")])
-    )
-
-    points128_xy_geojson = column_property(
-        select([text("ST_AsGeoJSON(points128, 2)")])
-    )
-
-    @property
-    def points_xy(self):
-        return json.loads(self.points_xy_geojson)["coordinates"]
-
-    @property
-    def points12_xy(self):
-        return json.loads(self.points12_xy_geojson)["coordinates"]
-
-    @property
-    def points128_xy(self):
-        return json.loads(self.points128_xy_geojson)["coordinates"]
-
-
-    @property
-    def points12_xy(self):
-        return (lambda x: np.reshape(np.array(x["data"]),x["shape"]))(to_shape(self.points12).array_interface()).astype(float).tolist()
-
-
-    @property
-    def points128_xy(self):
-        return (lambda x: np.reshape(np.array(x["data"]),x["shape"]))(to_shape(self.points128).array_interface()).astype(float).tolist()
-
-
-    @property
     def kde_array_100(self):
         return   imread(io.BytesIO(self.kde_tiff_100.tobytes())).astype(int).tolist()
-
-
-    @property
-    def kde_array_20(self):
-        return   imread(io.BytesIO(self.kde_tiff_20.tobytes())).astype(int).tolist()
-
-    @property
-    def kde_array_5(self):
-        return   imread(io.BytesIO(self.kde_tiff_5.tobytes())).astype(int).tolist()
 
     umis = relationship("Umi", cascade="all,delete" ,backref="segment")
 

@@ -10,9 +10,7 @@ from flask_migrate import Migrate
 
 
 app = Flask(__name__,static_url_path='') 
-
 app.config['SQLALCHEMY_DATABASE_URI'] = "postgres://ben_coolship_io:password@localhost/dd"
-
 
 from flask import Flask, request, send_from_directory
 import io
@@ -35,8 +33,6 @@ db = session.connection()
 
 queries = {}
 
-
-
 @app.after_request
 def after_request(response):
   response.headers.add('Access-Control-Allow-Origin', '*')
@@ -45,8 +41,6 @@ def after_request(response):
   return response
 
 from flask import Flask,redirect    
-
-
 
 TMPDIR = "/data/tmp"
 BLAT_PORT = "8080"
@@ -67,7 +61,6 @@ def datasetId(full_id):
 import re
 #!/usr/bin/python
 import os, requests, sys, json
-
 
 
 @app.route("/analysis/<dataset>/generate_notebook/")
@@ -94,6 +87,7 @@ def generate_notebook(dataset):
       for l in custom_content.splitlines() 
       ]
       )
+    
 
   r = requests.post('https://api.github.com/gists',
                     json.dumps({'files':{filename:{"content":custom_content}},
@@ -102,6 +96,55 @@ def generate_notebook(dataset):
   out = r.json()
 
   return json.dumps({"url":f"https://colab.research.google.com/gist/bh0085/{out['id']}"})
+
+@app.route("/dataset_stats/<dataset>")
+def dataset_stats(dataset):
+    dsid = getDatasetId(dataset)
+    return json.dumps({
+    "n_umis":sq(Umi).filter(Umi.dsid==dsid).count(),
+    "n_segments":sq(Segment).filter(Segment.dsid==dsid).count()
+    })
+
+
+
+
+@app.route("/api/<dataset>/cells/")
+def api_cells(dataset):
+    ids = json.loads(request.args.get("ids"))
+    return  json.dumps({s.id:s.as_detailed_frontend_dict()  
+                     for s in sq(Segment).filter(Segment.dsid==getDatasetId(dataset))
+                     .filter(Segment.id.in_(ids)).all()})
+
+
+def round_floats(o):
+    if isinstance(o, float): return round(o, 2)
+    if isinstance(o, dict): return {k: round_floats(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)): return [round_floats(x) for x in o]
+    return o
+
+
+json.dumps(round_floats([23.63437, 23.93437, 23.842347]))
+@app.route("/api/<dataset>/cell_neighborhoods/")
+def api_cell_neighborhoods(dataset):
+    ids = json.loads(request.args.get("ids"))
+    attrs = json.loads(request.args.get("attrs"))
+    cells = [  seg for cid in ids  for seg in sq(Segment).get(cid).intersecting_cells ]
+    return  json.dumps(round_floats({s.id:s.as_custom_frontend_dict(attrs)  
+                     for s in cells}))
+
+
+
+@app.route("/cells/all/<dataset>")
+def cells_all(dataset):
+  return json.dumps({s.id:s.as_frontend_dict()  
+                     for s in sq(Segment).filter(Segment.dsid==getDatasetId(dataset)).filter(Segment.n_umis > 20).limit(250).all()})
+  # return json.dumps(rsq(sq(Segment).filter(Segment.dsid==getDatasetId(dataset)).filter(Segment.n_umis > 20).statement, session.connection())[["id","n_umis","meanx","meany","rval", "gval", "bval","area12","hull128"]].to_dict(orient="records"))
+
+
+
+
+
+
 
 @app.route("/segmentations/<dataset>/passing/")
 def segmentations_passing_pixels(dataset):
@@ -112,6 +155,25 @@ def segmentations_passing_pixels(dataset):
   return json.dumps({})
   
 getDatasetId =  lambda dsname: int(dsname[:8])
+
+
+from io import BytesIO
+from flask import Flask, Response
+from werkzeug import FileWrapper
+from sqlalchemy import text
+
+
+
+@app.route("/dataset/<dataset>/preview2k")
+def preview2k(dataset):
+      dsid = getDatasetId(dataset)
+      import tifffile
+      # tiffb = tifffile.imread(io.BytesIO(session.execute(text("SELECT ST_AsTIFF(raster_2k_all, 'GTiff') from dataset;")).fetchone()[0]))
+      # b = io.BytesIO(session.execute(text("SELECT ST_AsTIFF(raster_2k_all, 'GTiff') from dataset;")).fetchone()[0])
+      # b = io.BytesIO(session.execute(text("SELECT ST_AsTIFF(ST_Resample(raster_2k_all,100,100), 'GTiff') from dataset;")).fetchone()[0])
+      b = io.BytesIO(session.execute(text("SELECT ST_AsJPEG(ST_Resample(raster_2k_all,200,200)) from dataset;")).fetchone()[0])
+      w = FileWrapper(b)
+      return Response(w, mimetype="image/jpeg", direct_passthrough=True)
 
 @app.route("/segmentations/<dataset>/annotations/")
 def segmentations_annotations(dataset):

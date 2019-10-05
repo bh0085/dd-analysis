@@ -10,7 +10,9 @@ from init_go_terms import init_go_terms
 from init_coords_and_colors import init_color_buffers, init_xy_buffers
 from init_frontend import init_frontend
 from init_postprocessing_frontend import init_postprocessing_frontend
+from init_postgis import init_postgis
 from init_dataset_database import init_dataset_database
+from init_transcripts_database import init_transcripts_database
 
 #functions which run after database initialization
 from init_segmentations import init_segmentations
@@ -58,6 +60,7 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
     force_resets_dataset = kwargs.get("force_resets_dataset",[])
     force_reset_all = kwargs.get("force_reset_all", False)
     reset_tmpfiles = kwargs.get("reset_tmpfiles")
+    max_step = kwargs.get("max_step", None)
 
     status = dataset["server_process_status"]
     # if processing has not yet started, begin
@@ -70,12 +73,15 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
         "INIT_BLAT":"INIT_BLAT",
         "INIT_TOPHAT_TRANSCRIPTS":"INIT_TOPHAT_TRANSCRIPTS", #csv having umis--> tx ids
         "INIT_GO_TERMS":"INIT_GO_TERMS",
+        "INIT_TRANSCRIPTS_DATABASE":"INIT_TRANSCRIPTS_DATABASE",
         "INIT_XY_BUFFERS":"INIT_XY_BUFFERS",
         "INIT_COLOR_BUFFERS":"INIT_COLOR_BUFFERS",
         "INIT_DATABASE_FILES":"INIT_DATABASE_FILES",
         "INIT_DATASET_DATABASE":"INIT_DATASET_DATABASE",
         "INIT_SEGMENTATIONS":"INIT_SEGMENTATIONS",
         "INIT_POSTPROCESSING_FRONTEND":"INIT_POSTPROCESSING_FRONTEND",
+        "INIT_POSTGIS":"INIT_POSTGIS",
+
     }
     #enumerate job statuses
     status = {
@@ -87,15 +93,21 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
 
     jobfuns = {
         "INIT_FRONTEND":init_frontend,
+        "INIT_XY_BUFFERS":init_xy_buffers,
+        "INIT_COLOR_BUFFERS":init_color_buffers,
+
+        "INIT_DATABASE_FILES":init_database_files,
+        "INIT_DATASET_DATABASE":init_dataset_database,
+
+
+        "INIT_SEGMENTATIONS":init_segmentations,
+        "INIT_POSTPROCESSING_FRONTEND":init_postprocessing_frontend,
+        "INIT_POSTGIS":init_postgis,
+
         "INIT_TOPHAT_TRANSCRIPTS":init_tophat_transcripts,
         "INIT_GO_TERMS":init_go_terms,
         "INIT_BLAT":init_blat,
-        "INIT_XY_BUFFERS":init_xy_buffers,
-        "INIT_COLOR_BUFFERS":init_color_buffers,
-        "INIT_DATABASE_FILES":init_database_files,
-        "INIT_DATASET_DATABASE":init_dataset_database,
-        "INIT_SEGMENTATIONS":init_segmentations,
-        "INIT_POSTPROCESSING_FRONTEND":init_postprocessing_frontend,
+        "INIT_TRANSCRIPTS_DATABASE":init_transcripts_database,
     }
 
 
@@ -105,7 +117,10 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
     val = root.get()[dataset_key]
     if not "server_job_statuses" in val:
         val.update(dict( server_job_statuses = {}))
+
+    if not "server_job_progresses" in val:
         val.update(dict( server_job_progresses= {}))
+
     
     val["server_process_status"] = status["RUNNING"]
     root.update({dataset_key:val})
@@ -157,15 +172,17 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
     #TODO: REPLACE ALL JOB QUEUEING WITH THIS LOOP
     for jobkey in [
         "INIT_FRONTEND",
-        "INIT_BLAT",
-        "INIT_TOPHAT_TRANSCRIPTS", 
-        "INIT_GO_TERMS", 
         "INIT_XY_BUFFERS", 
         "INIT_COLOR_BUFFERS",
         "INIT_DATABASE_FILES",
         "INIT_DATASET_DATABASE",    #must follow database files creation
         "INIT_SEGMENTATIONS",       #must follow database creation
         "INIT_POSTPROCESSING_FRONTEND",
+        "INIT_POSTGIS",
+        "INIT_TRANSCRIPTS_DATABASE",# ONLY FOR WHOLE TXOME
+        "INIT_BLAT",                # ONLY FOR WHOLE TXOME
+        "INIT_TOPHAT_TRANSCRIPTS",  # ONLY FOR WHOLE TXOME
+        "INIT_GO_TERMS",            # ONLY FOR WHOLE TXOME
         ]:
 
         #pass additional args (such as the storage key)
@@ -173,6 +190,9 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
         kw = {
             "key":dskey
         } if (jobkey in ["INIT_FRONTEND","INIT_POSTPROCESSING_FRONTEND"]) else {}
+
+
+
 
         jobname = jobs[jobkey]
         if (get_jobstatus(dataset_key, jobname) == "WAITING" ) or (process_allafter):
@@ -187,7 +207,10 @@ def process_dataset(gcs_folder, dataset, dataset_key,**kwargs):
                 set_jobstatus(dataset_key,jobname, status["COMPLETE"])
 
             else: raise Exception(f"nonzero output status for {jobname}")
-    
+        
+        if jobkey == max_step:
+            print(f"Surpassing last step {max_step}, breaking")
+            break
            
     val = root.get()[dataset_key]
     for k,v in val["server_job_statuses"].items():
@@ -265,6 +288,8 @@ def main():
                         const=True, default=False,
                         help='Recreate tmpfiles')
 
+    parser.add_argument('--max-step', dest="max_step",nargs="?")
+
     
     args = parser.parse_args()
     force_resets_step = []
@@ -281,7 +306,8 @@ def main():
         loop_queue(force_resets_step = force_resets_step,
             force_resets_dataset = force_resets_dataset,
                    reset_tmpfiles = args.reset_tmpfiles,
-                   force_reset_all = force_reset_all)
+                   force_reset_all = force_reset_all,
+                   max_step=args.max_step)
         
         if args.noloop: break
     exit

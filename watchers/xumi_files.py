@@ -37,16 +37,20 @@ seg_cols = [['id', int],
  [
   'unk4', lambda x: None],
  [
-  'unk5', lambda x: None]]
+  'unk5', lambda x: None],
+  [
+  'unk6', lambda x: None],]
 
 def parse_coords_file(filename):
     return [[coord_cols[i][1](e) for i, e in enumerate(l)] for l in csv.reader(open(filename))]
 
 
 def parse_annotation_file(filename):
+    print(filename)
+    print(annotation_cols)
     return [[annotation_cols[i][1](e) for i, e in enumerate(l)] for l in csv.reader(open(filename))]
 
 
 def parse_segmentation_file(filename):
-    return [[seg_cols[i][1](e) for i, e in enumerate(l)] for l in csv.reader(open(segfn))]
+    return [[seg_cols[i][1](e) for i, e in enumerate(l)] for l in csv.reader(open(filename))]
 # okay decompiling watchers/__pycache__/xumi_files.cpython-37.pyc

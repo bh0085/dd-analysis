@@ -22,7 +22,7 @@ def make_files(inp_folder, dataset):
     
     coord_data= parse_coords_file(basefn)
     annotation_data = parse_annotation_file(featfn)
-    seg_data = parse_annotation_file(segfn)
+    seg_data = parse_segmentation_file(segfn)
     
     #produce a small gzip output file having x,y,t for each point
     cfpath = os.path.join(out_folder,"coords.json.gz")
@@ -70,7 +70,7 @@ def make_files(inp_folder, dataset):
 
 def init_frontend(tmpdir, dataset, key = None):
     if not key: raise Exception()
-    files_for_upload =  make_files(folder, dataset)
+    files_for_upload =  make_files(tmpdir, dataset)
     upload_frontend_files(files_for_upload,dataset,key)
     return 0
 

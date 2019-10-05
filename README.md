@@ -23,3 +23,18 @@ grant all privileges on database dd to ben_coolship_io;
 ALTER USER ben_coolship_io WITH password  'password';
 CREATE EXTENSION pg_trgm;
 `
+
+### RESTART GUIDE ###
+To restart the server, 
+`
+sudo mount -o discard,defaults /dev/sdb /data
+gcsfuse --implicit-dirs slides.dna-microscopy.org /slides
+god
+god load ~/dd-alignment-server/server.god
+
+`
+
+
+
+## DAEMON (GOD) SCRIPTS ##
+R

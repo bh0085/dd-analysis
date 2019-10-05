@@ -11,18 +11,6 @@ import numpy as np
 import json, os
 from scipy import stats
 
-import pandas as pd
-import numpy as np
-import os
-import scipy
-from sqlalchemy import create_engine , cast, Index, func,ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String,BigInteger
-from geoalchemy2 import Geometry
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.orm import relationship
-
-
 getDatasetId =  lambda dsname: int(dsname[:8])
 
 def init_segmentations(tmpfolder, dataset):
@@ -42,7 +30,7 @@ def init_segmentations(tmpfolder, dataset):
     
     seg_counts = segment_umis.seg_id.value_counts()
 
-    segs = segment_umis.join(segment_umis.seg_id.value_counts().rename("seg_umi_count"), on = "seg_id").loc[lambda x: x.seg_umi_count>1]
+    segs = segment_umis.join(segment_umis.seg_id.value_counts().rename("seg_umi_count"), on = "seg_id").loc[lambda x: x.seg_umi_count>20]
     segs_by_id = segs.set_index("seg_id")
 
     print("computing eigensystems")
@@ -61,9 +49,6 @@ def init_segmentations(tmpfolder, dataset):
     # segs_with_dists = segs_with_dists.join(umis[["total_reads"]],on="umi_id")
     s_mean_xs =  segment_umis.groupby("seg_id").x.mean()
     s_mean_ys =  segment_umis.groupby("seg_id").y.mean()
-
-
-
     
     dbsegs = sq(Segment).filter(Segment.dsid == getDatasetId(nm)).all()
     for s in dbsegs:

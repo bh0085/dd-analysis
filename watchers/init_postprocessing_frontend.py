@@ -25,7 +25,7 @@ def make_pp_files(tmpdir, dataset):
     # Session = sessionmaker(db2)  
     # session = Session()
 
-    from dataset_models import Umi,  Dataset, GeneGoTerm, UmiGeneId, GoTerm, NcbiGene, Segment,LinkageCell
+    from dataset_models import Umi,  Dataset, GeneGoTerm, UmiGeneId, GoTerm, NcbiGene, Segment
     from db import session
 
     rsq = pd.read_sql_query
@@ -34,7 +34,7 @@ def make_pp_files(tmpdir, dataset):
 
     #WRITE UMI METADATA TO A FILE
     umi_ids_path = os.path.join(out_folder,"umi_ids.json.gz")
-    umis_df = rsq(sq(Umi.idx,Umi.umap_x,Umi.umap_y,Umi.umap_z,Umi.id,Umi.seg,Umi.lcell).filter(Umi.dsid==getDatasetId(nm)).statement,session.connection())
+    umis_df = rsq(sq(Umi.idx,Umi.umap_x,Umi.umap_y,Umi.umap_z,Umi.id,Umi.seg).filter(Umi.dsid==getDatasetId(nm)).statement,session.connection())
     print("umis")
     print(umis_df.iloc[:10])
     with gzip.open(umi_ids_path,"w") as f:
@@ -48,15 +48,21 @@ def make_pp_files(tmpdir, dataset):
     winning_segments_grid_path = os.path.join(out_folder,"winning_segments_grid.json.gz")
     passing_segments_grid_path = os.path.join(out_folder,"passing_segments_grid.json.gz")
 
+    segmentations_folder = os.path.join(
+        f"/data/dd-analysis/datasets/{nm}/segmentations/")
+
+    winning_path = os.path.join(segmentations_folder,"winning_pixels.csv")
+    passing_path = os.path.join(segmentations_folder,"passing_pixels.csv")
+
     print("DANGER! POST PROCESSING FRONTEND. UNCOMMENT THIS SECTION OF THE FILE WHEN RUNNING ON NEW DATASETS")
-    # winning_segments_df = pd.read_csv(winning_path, index_col=["x","y"])
-    # winning_nested = winning_segments_df.reset_index("y").groupby("x").apply(lambda x:  x.set_index("y").to_dict()['segment']).to_dict()
+    winning_segments_df = pd.read_csv(winning_path, index_col=["x","y"])
+    winning_nested = winning_segments_df.reset_index("y").groupby("x").apply(lambda x:  x.set_index("y").to_dict()['segment']).to_dict()
       
-    # passing_segments_df = pd.read_csv(passing_path, index_col=["x","y","segment"])
-    # passing_nested = passing_segments_df.reset_index(["y","segment"]).groupby("x").apply(lambda x:  x.groupby("y").apply(lambda g: [int(e) for e in g.segment.unique()]).to_dict()).to_dict()
+    passing_segments_df = pd.read_csv(passing_path, index_col=["x","y","segment"])
+    passing_nested = passing_segments_df.reset_index(["y","segment"]).groupby("x").apply(lambda x:  x.groupby("y").apply(lambda g: [int(e) for e in g.segment.unique()]).to_dict()).to_dict()
     
-    # with gzip.open(winning_segments_grid_path,"w") as f: f.write( bytes(json.dumps(winning_nested),'utf-8'))
-    # with gzip.open(passing_segments_grid_path,"w") as f: f.write( bytes(json.dumps(passing_nested),'utf-8'))
+    with gzip.open(winning_segments_grid_path,"w") as f: f.write( bytes(json.dumps(winning_nested),'utf-8'))
+    with gzip.open(passing_segments_grid_path,"w") as f: f.write( bytes(json.dumps(passing_nested),'utf-8'))
         
     #WRITE SEGMENT METADATA TO A FILE
     segment_metadata_path = os.path.join(out_folder,"segment_metadata.json.gz")
@@ -67,29 +73,11 @@ def make_pp_files(tmpdir, dataset):
                 rsq(sq(Segment).filter(Segment.dsid==getDatasetId(nm)).statement,session.connection()).set_index("id").to_json(orient="index"),'utf-8'
         ))
 
-    #WRITE LINKAGE_SEGMENT METADATA TO A FILE
-    linkage_cell_metadata_path = os.path.join(out_folder,"linkage_segment_metadata.json.gz")
-    with gzip.open(linkage_cell_metadata_path,"w") as f:
-
-        from sqlalchemy.orm import joinedload
-        cell_objects = sq(LinkageCell).filter(LinkageCell.dsid ==getDatasetId(nm)).options(joinedload('umis')).all()        
-            
-                
-        out = pd.DataFrame({c.id:pd.Series({
-                "n_umis": len(c.umis),
-                "meanx" :np.mean([u.x for u in c.umis]) if len(c.umis) > 0 else None,
-                "meany" :np.mean([u.y for u in c.umis]) if len(c.umis) > 0 else None,
-                })
-            for c in cell_objects}).T
-        out.index.name = "id"
-        f.write(bytes(out.to_json(orient="index"),'utf-8' ))
-
     return {
         "umi_ids":umi_ids_path,
         "winning_segments_grid":winning_segments_grid_path,
         "passing_segments_grid":passing_segments_grid_path,
         "segment_metadata":segment_metadata_path,
-        "linkage_cell_metadata":linkage_cell_metadata_path,
     }
 
 def init_postprocessing_frontend(tmpdir, dataset, key= None):
